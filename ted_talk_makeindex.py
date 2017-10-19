@@ -7,7 +7,7 @@ import datetime
 This program creates an index with the  most relevant information 
 from the pkl files. It is troublesome to iterate through the pkl
 files for viewing simple information (like total view count etc.)
-from the whole database. For that reason, this index is created.
+from the whole database. This index is created to simplify that task.
 It also outputs a list of all the tags (sounds etc. put into a parentheses)
 '''
 

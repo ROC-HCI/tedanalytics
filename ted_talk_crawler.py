@@ -110,7 +110,8 @@ def crawl_and_save(csvfilename,outfolder):
 
             # If successfully extracted, save the data
             consec_failcount = 0
-            cp.dump({'talk_transcript':txt,'transcript_micsec':micstime,'talk_meta':meta},open(outfolder+str(anid)+'.pkl','wb'))
+            cp.dump({'talk_transcript':txt,'transcript_micsec':micstime,
+                'talk_meta':meta},open(outfolder+str(anid)+'.pkl','wb'))
             # delete the entry
             del allids[i]
             print 'done'
