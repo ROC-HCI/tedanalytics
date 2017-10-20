@@ -235,11 +235,14 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
 if __name__=='__main__':
     if 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'SLURM_ARRAY_TASK_ID=',os.environ['SLURM_ARRAY_TASK_ID']
+        sys.stdout.flush()
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
             '/scratch/mtanveer/TED_video',
             os.environ['SLURM_ARRAY_TASK_ID'])
     else:
+        print 'SLURM ID not found'
+        sys.stdout.flush()
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
             '/scratch/mtanveer/TED_video')
