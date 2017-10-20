@@ -174,6 +174,9 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             if runforrow is not -1 and (rownum < runforrow*10 \
                 or rownum >= (runforrow+1)*10):
                 continue
+            else:
+                print 'runforrow=',runforrow
+                print 'rownum=',rownum
             # Random waiting up to 120 sec
             sleep(int(np.random.rand(1)[0]*120.))
             url = arow['public_url']
@@ -230,7 +233,8 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             #         ferr.write(url+'\n')
 
 if __name__=='__main__':
-    if 'SLURM_ARRAY_TASK_ID' in os.environ: 
+    if 'SLURM_ARRAY_TASK_ID' in os.environ:
+        print 'SLURM_ARRAY_TASK_ID=',os.environ['SLURM_ARRAY_TASK_ID']
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
             '/scratch/mtanveer/TED_video',
