@@ -172,7 +172,7 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             # try:
             meta = get_meta_new(url)
             id_ = meta['id']
-            print'examining ...',id_,url
+            print 'examining ...',id_,url
             # Skip if it is supposed to skip
             if id_ in toskip:
                 print '... skipping'
