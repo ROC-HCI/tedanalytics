@@ -36,6 +36,7 @@ def request_http(url):
             # Random waiting up to 120 sec
             sleep(int(np.random.rand(1)[0]*120.))
             print 'Trying again ...'
+            sys.stdout.flush()
     return text_seg
 
 def get_trans_new(src_url):
@@ -177,8 +178,7 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             else:
                 print 'runforrow=',runforrow
                 print 'rownum=',rownum
-            # Random waiting up to 120 sec
-            sleep(int(np.random.rand(1)[0]*120.))
+                sys.stdout.flush()
             url = arow['public_url']
             # Skip if already tried (succeded or failed)
             if url.strip() in toskip_url:
@@ -191,7 +191,9 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             # Skip if it is supposed to skip
             if id_ in toskip:
                 print '... skipping'
+                sys.stdout.flush()
                 continue
+            sys.stdout.flush()
             target_filename = os.path.join(outfolder,str(id_)+'.pkl')
             if os.path.isfile(target_filename):
                 # Update the metadata if the talk already exists
@@ -206,6 +208,7 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
                         'talk_meta':meta},open(target_filename,'wb'))
                 except:
                     print 'Transcript not found for,',id_
+                    sys.stdout.flush()
                     # Not being able to find transcript means a failure
                     with open('./failed.txt','a') as ferr:
                         ferr.write(url+'\n')
@@ -217,16 +220,18 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
                 # Record Successes
                 with open('./success.txt','a') as fsucc:
                     fsucc.write(url+'\n')
+                sys.stdout.flush()
                 continue
             print 'Video downloader started'
+            sys.stdout.flush()
             if meta['downloadlink']:
                 call(['wget','-O',target_videofile,meta['downloadlink']])
             else:
                 print 'Video could not save. No link found',id_
+                sys.stdout.flush()
             # Record Successes
             with open('./success.txt','a') as fsucc:
                 fsucc.write(url+'\n')
-            sys.stdout.flush()
             # except:
             #     # Record Failures
             #     with open('./failed.txt','a') as ferr:
