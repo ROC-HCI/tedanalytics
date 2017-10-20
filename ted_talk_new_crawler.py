@@ -13,7 +13,7 @@ from subprocess import call
 
 """
 The older crawler is not usable because the TED talk website is
-changed recently (As seen in aug 16th, 2017). Therefore, we need a 
+changed recently (As seen in Oct 20th, 2017). Therefore, we need a 
 new crawler. In the new system, the transcripts are timestamped
 per paragraph, not per utterance. Also, the meta data contains
 an additional JSON containing the complete meta data. Other
@@ -112,11 +112,20 @@ def get_meta_new(url_link):
             downlink = fullJSON['media']['internal'][linktype]['uri']
         else:
             downlink=''
-        # Date published
-        datepub = np.datetime64(
-                currenttalk_JSON['speakers'][0]['published_at']).astype('O')
-        # Date Filmed
-        datefilm = np.datetime64(currenttalk_JSON['recorded_at']).astype('O')
+        # Date published and Date Filmed
+        for player_talk in currenttalk_JSON['player_talks']:
+            datepub=-1
+            datefilm=-1
+            if player_talk['id']==talk_id:
+                datepub = player_talk['published']
+                datefilm = player_talk['published']
+                break
+        assert datepub is not -1 and datefilm is not -1,'Could not extract datepub or datefilm'
+        # datepub = np.datetime64(
+        #         currenttalk_JSON['speakers'][0]['published_at']).astype('O')
+        # datefilm = np.datetime64(currenttalk_JSON['recorded_at']).astype('O')
+        datepub = datetime.fromtimestamp(datepub)
+        datefilm = datetime.fromtimestamp(datefilm)
          # Total views
         totviews = fullJSON['viewed_count']
         #########################################################################
