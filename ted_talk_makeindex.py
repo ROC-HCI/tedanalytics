@@ -49,7 +49,13 @@ with open(outfile,'wb') as ofile:
         # Video Length in seconds
         ofile.write(str(data['talk_meta']['vidlen'])+',')
         # Find all the tags 
-        txt = ' '.join(data['talk_transcript'])
+        if type(data['talk_transcript'][0])==list:
+            # New style transcript
+            trans_data = [item for para in data['talk_transcript'] for item in para]
+        else:
+            # Old style transcript
+            trans_data = [item for item in data['talk_transcript']]
+        txt = ' '.join(trans_data)
         alltags.extend(re.findall('\([a-zA-Z]*?\)',txt))
         # Number of words in the transcript excluding tags
         wrd_count=len(re.sub('\([a-zA-Z]*?\)','',txt).split())
@@ -58,7 +64,8 @@ with open(outfile,'wb') as ofile:
         wps = float(wrd_count)/data['talk_meta']['vidlen']
         ofile.write(str(wps)+',')
         # Keywords
-        ofile.write(';'.join(data['talk_meta']['keywords'])+',')
+        ofile.write(';'.join([item.encode('ascii','ignore') \
+            for item in data['talk_meta']['keywords']])+',')
         # A heuristic estimation of if it is actually a public speech
         if 'live music' in data['talk_meta']['keywords']:
             ofile.write('No'+'\n')
@@ -71,6 +78,3 @@ with open(outfile,'wb') as ofile:
 
 with open(outtagfile,'wb') as tfile:
     tfile.write('\n'.join(list(set(alltags))))
-
-
-        
