@@ -22,15 +22,29 @@ aspects are tried to keep backward compatible.
 The crawler automatically downloads the videos unlike the previous crawler
 """
 
+def request_http(url):
+    count = 0
+    while count < 100:
+        try:
+            resp = urllib2.urlopen(url)
+            web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
+            text_seg = BeautifulSoup(web_src, 'lxml')
+            break
+        except urllib2.HTTPError:
+            count+=1
+            print 'HTTP Request failed (',count,') ... sleeping ...'
+            # Random waiting up to 120 sec
+            sleep(int(np.random.rand(1)[0]*120.))
+            print 'Trying again ...'
+    return text_seg
+
 def get_trans_new(src_url):
     '''
     Get the transcripts from the new format (as of Aug 16, 2017) of the
     TED talk web pages.
     '''
     talk_text = ''
-    resp = urllib2.urlopen(src_url+'/transcript?language=en')
-    web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
-    text_seg = BeautifulSoup(web_src, 'lxml')
+    text_seg = request_http(src_url+'/transcript?language=en')
     time_divs = text_seg.find_all('div',
             {'class':' Grid__cell w:1of6 w:1of8@xs w:1of10@sm w:1of12@md '})
     text_divs = text_seg.find_all('div',
@@ -51,14 +65,10 @@ def get_trans_new(src_url):
 def get_meta_new(url_link):
     '''
     This is the function to extract the meta information from
-    the new format (as of Aug 16, 2017) of TED talk web pages.
+    the new format (as of Oct 20, 2017) of TED talk web pages.
     '''
     # Retrieve and parse html
-    # Random waiting up to 120 sec
-    sleep(int(np.random.rand(1)[0]*120.))
-    resp = urllib2.urlopen(url_link)
-    web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
-    text_seg = BeautifulSoup(web_src, 'lxml')
+    text_seg = request_http(url_link)
 
     # Identify correct block for next piece of information
     scripts = text_seg.find_all('script')
