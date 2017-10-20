@@ -1,6 +1,8 @@
 #!/bin/sh
 #SBATCH -p standard
-#SBATCH --mem=8gb
+#SBATCH --mem=1gb
+#SBATCH -c 1
+#SBATCH -a 0-26
 #SBATCH -t 3-01:00:00  
 #SBATCH -J crawler_mtanveer
 #SBATCH -o /scratch/mtanveer/output/crawler_output%j

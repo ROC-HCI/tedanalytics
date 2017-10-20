@@ -126,12 +126,16 @@ def get_meta_new(url_link):
     'datefilmed':datefilm,'datecrawled':datecrawl,'vidlen':vidlen,'id':int(talk_id),
     'alldata_JSON':json.dumps(fullJSON)}
 
-def crawl_and_update(csvfilename,videofolder,outfolder='./talks'):
+def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
+    '''
+    Crawls the TED talks and extracts the relevant information.
+    '''
     # Talk ID's to skip
     if os.path.isfile('to_skip.txt'):
         with open('to_skip.txt','rb') as f:
             toskip=[int(id) for id in f]
     # Build a list of urls to skip: all successes and failures
+    # This is to skip a talk without actually visiting them
     toskip_url=[]
     if os.path.isfile('./success.txt'):
         with open('./success.txt') as f:
@@ -145,8 +149,12 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks'):
     # New style csv file
     with open(csvfilename,'rU') as f:
         csvfile = csv.DictReader(f)
-        for arow in csvfile:
-            sleep(int(np.random.rand(1)[0]*10.))
+        for rownum,arow in enumerate(csvfile):
+            if runforrow is not -1 and rownum >= runforrow*100 \
+                and rownum < (runforrow+1)*100:
+                continue
+            # Random waiting up to 30 sec
+            sleep(int(np.random.rand(1)[0]*30.))
             url = arow['public_url']
             # Skip if already tried (succeded or failed)
             if url.strip() in toskip_url:
@@ -180,7 +188,13 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks'):
                         continue
                 # Now save the video
                 target_videofile = os.path.join(videofolder,str(id_)+'.mp4')
-                print 'video downloader started'
+                if os.path.exists(target_videofile):
+                    print 'Video exists. skipping ...'
+                    # Record Successes
+                    with open('./success.txt','a') as fsucc:
+                        fsucc.write(url+'\n')
+                    continue
+                print 'Video downloader started'
                 if meta['downloadlink']:
                     call(['wget','-O',target_videofile,meta['downloadlink']])
                 else:
@@ -194,6 +208,14 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks'):
                     ferr.write(url+'\n')
 
 if __name__=='__main__':
-    crawl_and_update('./TED Talks as of 08.04.2017.csv','/scratch/mtanveer/TED_video')
+    if 'SLURM_ARRAY_TASK_ID' in os.environ: 
+        crawl_and_update(
+            './TED Talks as of 08.04.2017.csv',
+            '/scratch/mtanveer/TED_video',
+            os.environ['SLURM_ARRAY_TASK_ID'])
+    else:
+        crawl_and_update(
+            './TED Talks as of 08.04.2017.csv',
+            '/scratch/mtanveer/TED_video')
 
 
