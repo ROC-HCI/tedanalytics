@@ -54,6 +54,8 @@ def get_meta_new(url_link):
     the new format (as of Aug 16, 2017) of TED talk web pages.
     '''
     # Retrieve and parse html
+    # Random waiting up to 120 sec
+    sleep(int(np.random.rand(1)[0]*120.))
     resp = urllib2.urlopen(url_link)
     web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
     text_seg = BeautifulSoup(web_src, 'lxml')
@@ -159,11 +161,11 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
     with open(csvfilename,'rU') as f:
         csvfile = csv.DictReader(f)
         for rownum,arow in enumerate(csvfile):
-            if runforrow is not -1 and rownum >= runforrow*100 \
-                and rownum < (runforrow+1)*100:
+            if runforrow is not -1 and (rownum < runforrow*10 \
+                or rownum >= (runforrow+1)*10):
                 continue
-            # Random waiting up to 10 sec
-            sleep(int(np.random.rand(1)[0]*10.))
+            # Random waiting up to 120 sec
+            sleep(int(np.random.rand(1)[0]*120.))
             url = arow['public_url']
             # Skip if already tried (succeded or failed)
             if url.strip() in toskip_url:
