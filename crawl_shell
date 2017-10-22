@@ -2,11 +2,14 @@
 #SBATCH -p standard
 #SBATCH --mem=1gb
 #SBATCH -c 1
-#SBATCH -a 0-26
+#SBATCH -a 0-30
 #SBATCH -t 3-01:00:00  
 #SBATCH -J crawler_mtanveer
 #SBATCH -o /scratch/mtanveer/output/crawler_output%j
 #SBATCH -e /scratch/mtanveer/output/crawler_error%j
 
 module load anaconda
-python ./ted_talk_new_crawler.py
+echo $SLURM_ARRAY_TASK_ID
+export TASK_SPLIT=30
+python ted_talk_new_crawler.py
+#python test_environ.py

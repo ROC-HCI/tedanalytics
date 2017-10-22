@@ -24,8 +24,13 @@ The crawler automatically downloads the videos unlike the previous crawler
 
 def request_http(url):
     count = 0
+    print 'requested:',url
+    sys.stdout.flush()
+    text_seg=None
     while count < 100:
         try:
+            # sleep 3 seconds
+            sleep(3)
             resp = urllib2.urlopen(url)
             web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
             text_seg = BeautifulSoup(web_src, 'lxml')
@@ -33,10 +38,12 @@ def request_http(url):
         except urllib2.HTTPError:
             count+=1
             print 'HTTP Request failed (',count,') ... sleeping ...'
-            # Random waiting up to 120 sec
-            sleep(int(np.random.rand(1)[0]*120.))
+            # Random waiting up to 60 sec
+            sleep(int(np.random.rand(1)[0]*60))
             print 'Trying again ...'
             sys.stdout.flush()
+    if not text_seg:
+        raise IOError('HTTP Failure')
     return text_seg
 
 def get_trans_new(src_url):
@@ -119,7 +126,7 @@ def get_meta_new(url_link):
             downlink = fullJSON['media']['internal']['podcast-regular']['uri']
         elif 'media' in fullJSON and 'internal' in fullJSON['media'] and \
             len(fullJSON['media']['internal'].keys()) > 0:
-            # If the regular podcast link is not available 
+            # If the regular podcast link is not available
             # save whatever is available
             linktype = fullJSON['media']['internal'].keys()[0]
             downlink = fullJSON['media']['internal'][linktype]['uri']
@@ -148,7 +155,11 @@ def get_meta_new(url_link):
     'datefilmed':datefilm,'datecrawled':datecrawl,'vidlen':vidlen,'id':int(talk_id),
     'alldata_JSON':json.dumps(fullJSON)}
 
-def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
+def crawl_and_update(csvfilename,
+        videofolder,
+        outfolder='./talks',
+        split_idx=-1,
+        split_num=-1):
     '''
     Crawls the TED talks and extracts the relevant information.
     '''
@@ -167,33 +178,49 @@ def crawl_and_update(csvfilename,videofolder,outfolder='./talks',runforrow=-1):
             toskip_url.extend([aurl.strip() for aurl in f])
     toskip=set(toskip)
     toskip_url=set(toskip_url)
-
+    # Debug
+    print 'Opening the csv file'
+    sys.stdout.flush()
     # New style csv file
     with open(csvfilename,'rU') as f:
+        line_num = sum([1 for arow in csv.DictReader(f)])
+    with open(csvfilename,'rU') as f:
         csvfile = csv.DictReader(f)
+        # debug
+        print 'csv file opened successfully'
+        sys.stdout.flush()
+        # Starting to read the csv file
         for rownum,arow in enumerate(csvfile):
-            if runforrow is not -1 and (rownum < runforrow*10 \
-                or rownum >= (runforrow+1)*10):
-                continue
-            else:
-                print 'runforrow=',runforrow
-                print 'rownum=',rownum
-                sys.stdout.flush()
+            if split_idx is not -1:
+                datslice = line_num/split_num
+                if rownum < split_idx*datslice or rownum >= (split_idx+1)*datslice:
+                    continue
+            print 'split_idx =',split_idx
+            print 'current row =',rownum
+            sys.stdout.flush()
             url = arow['public_url']
             # Skip if already tried (succeded or failed)
             if url.strip() in toskip_url:
                 continue
             # Try to download if not tried before
-            # try:
-            meta = get_meta_new(url)
+            try:
+                meta = get_meta_new(url)
+            except:
+                print 'Failed to extract meta. continuing'
+                sys.stdout.flush()
+                # No meta means a failure
+                with open('./failed.txt','a') as ferr:
+                    ferr.write(url+'\n')
+                continue
+
             id_ = meta['id']
             print 'examining ...',id_,url
+            sys.stdout.flush()
             # Skip if it is supposed to skip
             if id_ in toskip:
                 print '... skipping'
                 sys.stdout.flush()
                 continue
-            sys.stdout.flush()
             target_filename = os.path.join(outfolder,str(id_)+'.pkl')
             if os.path.isfile(target_filename):
                 # Update the metadata if the talk already exists
@@ -244,7 +271,8 @@ if __name__=='__main__':
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
             '/scratch/mtanveer/TED_video',
-            os.environ['SLURM_ARRAY_TASK_ID'])
+            split_idx=int(os.environ['SLURM_ARRAY_TASK_ID']),
+            split_num=int(os.environ['TASK_SPLIT']))
     else:
         print 'SLURM ID not found'
         sys.stdout.flush()
