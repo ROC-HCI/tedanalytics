@@ -29,24 +29,28 @@ def request_http(url):
     sys.stdout.flush()
     text_seg=None
     while count < 100:
-       # sleep 5 seconds
-       sleep(5)
-       try:
+        # sleep 5 seconds
+        sleep(5)
+        try:
             resp = urllib2.urlopen(url)
             break
-        except urllib2.HTTPError,e:
-            if e.code = 429:
+        except urllib2.HTTPError as e:
+            if e.code == 404:
+                raise
+            else:
                 count+=1
+                print 'HTTP Error code:',e.code
+                print 'HTTP Error msg:',e.msg
                 print 'Too frequent HTTP call (',count,') ... sleeping ...'
                 # Random waiting up to 60 sec
                 sleep(int(np.random.rand(1)[0]*60))
                 print 'Trying again ...'
                 sys.stdout.flush()
-            else:
-                raise
-        web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
-        text_seg = BeautifulSoup(web_src, 'lxml')
-   if not text_seg:
+                continue
+
+    web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
+    text_seg = BeautifulSoup(web_src, 'lxml')
+    if not text_seg:
         raise IOError('HTTP Failure')
     return text_seg
 
@@ -211,7 +215,9 @@ def crawl_and_update(csvfilename,
             ######################### Get Meta ############################
             try:
                 meta = get_meta_new(url)
-            except:
+            except Exception as e__:
+                print
+                print e__
                 print 'Failed to extract meta. continuing'
                 sys.stdout.flush()
                 # No meta means a failure
@@ -231,7 +237,9 @@ def crawl_and_update(csvfilename,
             ########################## Get Transcript #######################
             try:
                 txt,micstime = get_trans_new(url)
-            except:
+            except Exception as e:
+                print
+                print e
                 print 'Transcript not found for,',id_
                 sys.stdout.flush()
                 # Not being able to find transcript means a failure
