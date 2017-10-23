@@ -29,21 +29,24 @@ def request_http(url):
     sys.stdout.flush()
     text_seg=None
     while count < 100:
-        try:
-            # sleep 3 seconds
-            sleep(3)
+       # sleep 5 seconds
+       sleep(5)
+       try:
             resp = urllib2.urlopen(url)
-            web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
-            text_seg = BeautifulSoup(web_src, 'lxml')
             break
-        except urllib2.HTTPError:
-            count+=1
-            print 'HTTP Request failed (',count,') ... sleeping ...'
-            # Random waiting up to 60 sec
-            sleep(int(np.random.rand(1)[0]*60))
-            print 'Trying again ...'
-            sys.stdout.flush()
-    if not text_seg:
+        except urllib2.HTTPError,e:
+            if e.code = 429:
+                count+=1
+                print 'Too frequent HTTP call (',count,') ... sleeping ...'
+                # Random waiting up to 60 sec
+                sleep(int(np.random.rand(1)[0]*60))
+                print 'Trying again ...'
+                sys.stdout.flush()
+            else:
+                raise
+        web_src = resp.read().decode('utf8','ignore').replace('\r',' ').replace('\n', ' ')
+        text_seg = BeautifulSoup(web_src, 'lxml')
+   if not text_seg:
         raise IOError('HTTP Failure')
     return text_seg
 
