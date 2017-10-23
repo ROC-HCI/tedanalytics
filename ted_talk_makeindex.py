@@ -2,7 +2,7 @@ import os
 import re
 import cPickle as cp
 import datetime
-
+from TED_data_location import ted_data_path
 '''
 This program creates an index with the  most relevant information 
 from the pkl files. It is troublesome to iterate through the pkl
@@ -12,7 +12,7 @@ It also outputs a list of all the tags (sounds etc. put into a parentheses)
 '''
 
 # Location where the .pkl files reside
-talkspath = './talks/'
+talkspath = os.path.join(ted_data_path,'TED_meta/')
 # Output file
 outfile = './index.csv'
 # Output Tag list

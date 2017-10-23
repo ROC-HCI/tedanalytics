@@ -10,6 +10,7 @@ from datetime import datetime
 from time import sleep
 import cPickle as cp
 from subprocess import call
+from TED_data_location import ted_data_path
 
 """
 The older crawler is not usable because the TED talk website is
@@ -52,7 +53,7 @@ def get_trans_new(src_url):
     TED talk web pages.
     '''
     talk_text = ''
-    text_seg = request_http(src_url+'/transcript?language=en')
+    text_seg = request_http(src_url+'/transcript/transcript?language=en')
     time_divs = text_seg.find_all('div',
             {'class':' Grid__cell w:1of6 w:1of8@xs w:1of10@sm w:1of12@md '})
     text_divs = text_seg.find_all('div',
@@ -68,6 +69,8 @@ def get_trans_new(src_url):
         trns_text.append([aspan.strip() for aspan in re.split('\t*',
             atext.contents[1].contents[0])
             if aspan.strip()])
+    if not trns_text or not trns_micsec:
+        raise IOError('Empty transcripts')
     return trns_text,trns_micsec
 
 def get_meta_new(url_link):
@@ -153,11 +156,11 @@ def get_meta_new(url_link):
     return {'ratings':ratings,'title':title,'author':author,'keywords':keywrds,
     'totalviews':totviews,'downloadlink':downlink,'datepublished':datepub,
     'datefilmed':datefilm,'datecrawled':datecrawl,'vidlen':vidlen,'id':int(talk_id),
-    'alldata_JSON':json.dumps(fullJSON)}
+    'alldata_JSON':json.dumps(fullJSON),'url':url_link}
 
 def crawl_and_update(csvfilename,
         videofolder,
-        outfolder='./talks',
+        outfolder,
         split_idx=-1,
         split_num=-1):
     '''
@@ -202,7 +205,7 @@ def crawl_and_update(csvfilename,
             # Skip if already tried (succeded or failed)
             if url.strip() in toskip_url:
                 continue
-            # Try to download if not tried before
+            ######################### Get Meta ############################
             try:
                 meta = get_meta_new(url)
             except:
@@ -212,7 +215,7 @@ def crawl_and_update(csvfilename,
                 with open('./failed.txt','a') as ferr:
                     ferr.write(url+'\n')
                 continue
-
+            # Meta successfully extracted
             id_ = meta['id']
             print 'examining ...',id_,url
             sys.stdout.flush()
@@ -222,24 +225,19 @@ def crawl_and_update(csvfilename,
                 sys.stdout.flush()
                 continue
             target_filename = os.path.join(outfolder,str(id_)+'.pkl')
-            if os.path.isfile(target_filename):
-                # Update the metadata if the talk already exists
-                alldata = cp.load(open(target_filename))
-                alldata['talk_meta']=meta
-                cp.dump(alldata,open(target_filename,'wb'))
-            else:
-                # otherwise, try to save everything
-                try:
-                    txt,micstime = get_trans_new(url)
-                    cp.dump({'talk_transcript':txt,'transcript_micsec':micstime,
-                        'talk_meta':meta},open(target_filename,'wb'))
-                except:
-                    print 'Transcript not found for,',id_
-                    sys.stdout.flush()
-                    # Not being able to find transcript means a failure
-                    with open('./failed.txt','a') as ferr:
-                        ferr.write(url+'\n')
-                    continue
+            ########################## Get Transcript #######################
+            try:
+                txt,micstime = get_trans_new(url)
+            except:
+                print 'Transcript not found for,',id_
+                sys.stdout.flush()
+                # Not being able to find transcript means a failure
+                with open('./failed.txt','a') as ferr:
+                    ferr.write(url+'\n')
+                continue
+            ########################## Save Everything ######################
+            cp.dump({'talk_transcript':txt,'transcript_micsec':micstime,
+                    'talk_meta':meta},open(target_filename,'wb'))
             # Now save the video
             target_videofile = os.path.join(videofolder,str(id_)+'.mp4')
             if os.path.exists(target_videofile):
@@ -259,10 +257,6 @@ def crawl_and_update(csvfilename,
             # Record Successes
             with open('./success.txt','a') as fsucc:
                 fsucc.write(url+'\n')
-            # except:
-            #     # Record Failures
-            #     with open('./failed.txt','a') as ferr:
-            #         ferr.write(url+'\n')
 
 if __name__=='__main__':
     if 'SLURM_ARRAY_TASK_ID' in os.environ:
@@ -270,7 +264,8 @@ if __name__=='__main__':
         sys.stdout.flush()
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
-            '/scratch/mtanveer/TED_video',
+            os.path.join(ted_data_path,'TED_video/'),
+            os.path.join(ted_data_path,'TED_meta/'),
             split_idx=int(os.environ['SLURM_ARRAY_TASK_ID']),
             split_num=int(os.environ['TASK_SPLIT']))
     else:
@@ -278,6 +273,7 @@ if __name__=='__main__':
         sys.stdout.flush()
         crawl_and_update(
             './TED Talks as of 08.04.2017.csv',
-            '/scratch/mtanveer/TED_video')
+            os.path.join(ted_data_path,'TED_video/'),
+            os.path.join(ted_data_path,'TED_meta/'))
 
 

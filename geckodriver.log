@@ -1,3 +1,0 @@
-1502912285039	geckodriver	INFO	Listening on 127.0.0.1:36668
-1502912286418	geckodriver::marionette	INFO	Starting browser /usr/bin/firefox with args ["-marionette"]
-Error: GDK_BACKEND does not match available displays

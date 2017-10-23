@@ -2,3 +2,4 @@
 *.pyc
 run
 plots/
+TED_data_location.py
