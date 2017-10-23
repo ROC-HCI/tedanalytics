@@ -23,7 +23,7 @@ ratinglist = ['beautiful','funny', 'ingenious', 'ok', 'fascinating',\
   'jaw-dropping', 'obnoxious', 'confusing', 'courageous', 'unconvincing']
 
 allfiles = [afile for afile in os.listdir(talkspath) if afile.endswith('pkl')]
-alltags = []
+alltags = {}
 with open(outfile,'wb') as ofile:
     # Write header
     ofile.write('Video_ID,Title,'+','.join(ratinglist)+
@@ -36,7 +36,7 @@ with open(outfile,'wb') as ofile:
         # ID
         ofile.write(afile.split('.')[0]+',')
         # Title
-        ofile.write(data['talk_meta']['title'].replace(',',' ')+',')
+        ofile.write(data['talk_meta']['title'].encode('utf8').replace(',',' ')+',')
         # Ratings
         ratings = [str(data['talk_meta']['ratings'][akey]) \
             for akey in ratinglist]
@@ -56,7 +56,11 @@ with open(outfile,'wb') as ofile:
             # Old style transcript
             trans_data = [item for item in data['talk_transcript']]
         txt = ' '.join(trans_data)
-        alltags.extend(re.findall('\([a-zA-Z]*?\)',txt))
+        for atag in re.findall('\([a-zA-Z]*?\)',txt):
+            if atag in alltags:
+                alltags[atag]+=1
+            else:
+                alltags[atag]=1
         # Number of words in the transcript excluding tags
         wrd_count=len(re.sub('\([a-zA-Z]*?\)','',txt).split())
         ofile.write(str(wrd_count)+',')
@@ -77,4 +81,5 @@ with open(outfile,'wb') as ofile:
             ofile.write('Yes'+'\n')
 
 with open(outtagfile,'wb') as tfile:
-    tfile.write('\n'.join(list(set(alltags))))
+    for atag in alltags:
+        tfile.write(atag+' :'+str(alltags[atag])+'\n')
