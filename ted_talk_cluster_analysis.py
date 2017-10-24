@@ -150,7 +150,6 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
         # Pretty draw the clusters
         draw_clusters_pretty(avg_dict,comparator,csvcontent,csv_id,
             b_=s,outfilename=outfilename)
-        
         # Now apply ANOVA and compare clusters
         pvals = {}
         allvals = {}

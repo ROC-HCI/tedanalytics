@@ -30,7 +30,7 @@ def request_http(url):
     text_seg=None
     while count < 100:
         # sleep 5 seconds
-        sleep(5)
+        sleep(2)
         try:
             resp = urllib2.urlopen(url)
             break
