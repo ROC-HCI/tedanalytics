@@ -45,9 +45,9 @@ def plot_statistics(infolder,outfolder):
                 atalk['talk_meta']['datepublished']
         timealive.append(dtdelta.days)
         # Total number of words and sentences
-        fulltrns = ' '.join([aline for apara in atalk['talk_transcript']\
-                for aline in apara])
-        fulltrns = re.sub('\([\w]*?\)','',fulltrns)
+        fulltrns = ' '.join([aline.encode('ascii','ignore') for apara\
+                in atalk['talk_transcript'] for aline in apara])
+        fulltrns = re.sub('\([\w ]*?\)','',fulltrns)
         totsent+= len(nltk.sent_tokenize(fulltrns))
         tottok += len(nltk.word_tokenize(fulltrns))
 

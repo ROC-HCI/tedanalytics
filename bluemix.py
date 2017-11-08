@@ -1,35 +1,54 @@
 import os
 import re
+import shutil
 import cPickle as cp
 import numpy as np
 import math
 from nltk.tokenize import sent_tokenize
 from bluemix_key import *
+from TED_data_location import ted_data_path
+from list_of_talks import all_valid_talks
 
-imporant_talks=[66,96,97,206,229,549,618,
-                685,741,848,1246,1344,1377,1569,1647,1815,1821,
-                2034,2399,2405,220,268,339,345,379,402,403,427,
-                439,500,673,675,679,925,962,1294,1332,1373,
-                1445,1466]
+'''
+This module extracts the bluemix scores from IBM Watson Tone Analyzer.
+The code and its core assumptions are altered on October 30th to make
+it consistent with the new crawler format and the overall folder
+structure. The code is employed to extract the bluemix scores for the
+new TED talks.
+Please note that this module assumes the existence of a working
+credential in the bluemix_key file.
+'''
 
 # Use the bluemix api to extract tones
 def fetch_partial_annotations():
-    alltalks = [afile[:-4] for afile in os.listdir('./talks/') \
-        if afile.endswith('.pkl')]
-    skipped_talks = [afile[:-4] for afile in \
-        os.listdir('./bluemix_sentiment_partial/') if afile.endswith('.pkl')]
+    # Create all paths
+    metafolder = os.path.join(ted_data_path,'TED_meta/')
+    outfolder = os.path.join(ted_data_path,\
+            'TED_feature_bluemix_scores/')
+    partfolder = os.path.join(ted_data_path,'TED_bm_partial/') 
+    if not os.path.exists(partfolder):
+        os.mkdir(partfolder)
+    # List existing full and partial data
+    full_score = [int(afile[:-4]) for afile in \
+        os.listdir(outfolder) if afile.endswith('.pkl')]
+    part_score = [int(afile[:-4]) for afile in \
+        os.listdir(partfolder) if afile.endswith('.pkl')]
 
-    for atalk in alltalks:
-        if atalk in skipped_talks:
+    # Start processing
+    for atalk in all_valid_talks:
+        if atalk in full_score or atalk in part_score:
             print 'skipping:',atalk
             continue
-        filename = './talks/'+atalk+'.pkl'
+        filename = os.path.join(metafolder,str(atalk)+'.pkl')
         print filename
         data = cp.load(open(filename))
-        txt = re.sub('\([a-zA-Z]*?\)','',' '.join(data['talk_transcript']))
+        txt = ' '.join([aline.encode('ascii','ignore') for apara \
+                in data['talk_transcript'] for aline in apara])
+        # remove tags
+        txt = re.sub('\([\w ]*?\)','',txt)
         response = tone_analyzer.tone(text=txt)
         print response
-        with open('./bluemix_sentiment/'+atalk+'.pkl','wb') as f:
+        with open(os.path.join(partfolder,str(atalk)+'.pkl'),'wb') as f:
             cp.dump(response,f)
 
 # segment a list into chunks of 100's
@@ -73,43 +92,54 @@ def parse_sentence_tone(senttone_list):
 
 # Bluemax gives tone only for the first 100 sentences. 
 # This function gets the remaining annotations
-def fetch_remaining_annotations(talksdir='./talks/',
-                                outdir='./bluemix_sentiment/',
-                                partdir='./bluemix_sentiment_partial/'):
-    imporant_talks=[1152,66,96,97,206,229,549,618,
-                685,741,848,1246,1344,1377,1569,1647,1815,1821,
-                2034,2399,2405,220,268,339,345,379,402,403,427,
-                439,500,673,675,679,925,962,1294,1332,1373,
-                1445,1466]
-    alltalks = [int(afile[:-4]) for afile in os.listdir(talksdir) \
-        if afile.endswith('.pkl')]
-    skipped_talks = [int(afile[:-4]) for afile in os.listdir(outdir) \
-        if afile.endswith('.pkl')]
+def fetch_remaining_annotations(talksdir='TED_meta/',
+                                outdir='TED_feature_bluemix_scores/',
+                                partdir='TED_bm_partial/'):
+    # Create all paths
+    metafolder = os.path.join(ted_data_path,talksdir)
+    outfolder = os.path.join(ted_data_path,outdir)
+    partfolder = os.path.join(ted_data_path,partdir) 
+    if not os.path.exists(partfolder):
+        os.mkdir(partfolder)
+    # List existing full and partial data
+    full_score = [int(afile[:-4]) for afile in \
+        os.listdir(outfolder) if afile.endswith('.pkl')]
+    part_score = [int(afile[:-4]) for afile in \
+        os.listdir(partfolder) if afile.endswith('.pkl')]
 
-    for atalk in alltalks:
-        if atalk in skipped_talks:
+    for atalk in all_valid_talks:
+        if atalk in full_score or atalk not in part_score:
             print 'skipping:',atalk
             continue
-        filename = talksdir+str(atalk)+'.pkl'
-        print filename
+        print atalk
+        # Source and destination files
+        src = os.path.join(partfolder,str(atalk)+'.pkl')
+        dst = os.path.join(outfolder,str(atalk)+'.pkl')
+
+        # Read the current file and check transcript length
+        filename = os.path.join(metafolder,str(atalk)+'.pkl')
         data = cp.load(open(filename))
-        txt = re.sub('\([a-zA-Z]*?\)','',' '.join(data['talk_transcript']))
+        txt = ' '.join([aline.encode('ascii','ignore') for apar in\
+                data['talk_transcript'] for aline in apar])
+        # remove tags
+        txt = re.sub('\([\w ]*?\)','',txt)
         sentences = sent_tokenize(txt)
         if len(sentences)<=100:
             # Old annotation has all the information. So skip.
             print 'Less than 100 sentences. copying directly',atalk
-            cp.dump(cp.load(open(partdir+str(atalk)+'.pkl')),\
-                open(outdir+str(atalk)+'.pkl','wb'))
+            shutil.copyfile(src,dst)
             continue
         else:
-            # This is the old annotation
-            existingdata = cp.load(open(partdir+str(atalk)+'.pkl'))
+            # This is the partial score data
+            existingdata = cp.load(src)
+            # Mark pickles without sentence-wise score
             if not existingdata.get('sentences_tone'):
-                print 'Sentence-wise annotation not found. Marking it and skipping ...'
-                cp.dump(cp.load(open(partdir+str(atalk)+'.pkl')),\
-                    open(outdir+str(atalk)+'_no_sentence.pkl','wb'))
+                print 'Sentence-wise annotation not found.'\
+                        ' Marking it and skipping ...'
+                shutil.copyfile(src,os.path.join(outfolder,str(atalk)+\
+                        '_no_sentence.pkl'))
                 continue
-
+            # Processing sentence-wise scores (adding missing scores)
             old_to = existingdata['sentences_tone'][-1]['input_to']
             old_sentid = existingdata['sentences_tone'][-1]['sentence_id']
             # Segment the talk in chunks of 100 sentences
@@ -135,8 +165,7 @@ def fetch_remaining_annotations(talksdir='./talks/',
                 # Update old_to and old_sentid to the most recent to value
                 old_to = output[i]['input_to']
                 old_sentid = output[i]['sentence_id']
-
-            cp.dump(existingdata,open(outdir+str(atalk)+'.pkl','wb'))
+            cp.dump(existingdata,open(dst,'wb'))
 
 
 

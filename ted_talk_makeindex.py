@@ -49,20 +49,16 @@ with open(outfile,'wb') as ofile:
         # Video Length in seconds
         ofile.write(str(data['talk_meta']['vidlen'])+',')
         # Find all the tags 
-        if type(data['talk_transcript'][0])==list:
-            # New style transcript
-            trans_data = [item for para in data['talk_transcript'] for item in para]
-        else:
-            # Old style transcript
-            trans_data = [item for item in data['talk_transcript']]
-        txt = ' '.join(trans_data)
-        for atag in re.findall('\([a-zA-Z]*?\)',txt):
+        # New style transcript
+        txt =' '.join([item.encode('ascii','ignore') for para in \
+                data['talk_transcript'] for item in para])
+        for atag in re.findall('\([\w ]*?\)',txt):
             if atag in alltags:
                 alltags[atag]+=1
             else:
                 alltags[atag]=1
         # Number of words in the transcript excluding tags
-        wrd_count=len(re.sub('\([a-zA-Z]*?\)','',txt).split())
+        wrd_count=len(re.sub('\([\w ]*?\)','',txt).split())
         ofile.write(str(wrd_count)+',')
         # Words per second
         wps = float(wrd_count)/data['talk_meta']['vidlen']
@@ -81,5 +77,5 @@ with open(outfile,'wb') as ofile:
             ofile.write('Yes'+'\n')
 
 with open(outtagfile,'wb') as tfile:
-    for atag in alltags:
-        tfile.write(atag+' :'+str(alltags[atag])+'\n')
+    for count,atag in sorted([(-1*val,key)for key,val in alltags.items()]):
+        tfile.write(atag+' :'+str(-1*count)+'\n')
