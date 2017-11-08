@@ -1,2 +1,2 @@
 # Location of the TED dataset. Adjust the path according your data location.
-ted_data_path = '/scratch/mtanveer/'
+ted_data_path = '/p/behavioral/TED_dataset'

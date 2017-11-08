@@ -10,6 +10,7 @@ import stat
 import glob 
 import os
 import re
+import csv
 
 '''
 This module extracts the dependency tree for each sentence of the transcript
@@ -17,6 +18,124 @@ located inside the TED_meta pickle file.
 It also updates the pickle file (in place) with the dependency information.
 It must run from within the brianlow/syntaxnet docker container default path.
 '''
+
+names = cp.load(open('names.pkl'))['names']
+
+def split_speakername(txt,speakername):
+    '''
+    Separate the speaker name and the text
+    '''
+    temp=[]
+    for aname in speakername:
+        temp.append(aname.replace('_',' '))
+        aname = re.split('[_ ]',aname)
+        temp.append(aname[0][0]+aname[-1][0])
+        temp.append(aname[0][0]+aname[-1])
+        temp.append(aname[0]+aname[-1][0])
+        temp.append(''.join([part[0] for part in aname]))
+    speakername.extend(temp)
+    txt = txt.lower()
+    if ':' in txt:
+        txtsplt = txt.split(':')
+        candidate = txtsplt[0].strip()
+        txtrest = ':'.join(txtsplt[1:])[1:]
+        if candidate.count(' ')< 3 and (candidate in speakername or \
+           any([aname in speakername for aname in candidate.split()]) or \
+           re.match('narrator|moderator|host|girl[\w ]*|boy[\w ]*|'+\
+                   'man[\w ]*|woman[\w ]*|audience|video|audio|'+\
+                   'voice[\w ]*|child|lawyer|server|customer|'+\
+                   'interpreter|student',candidate) or \
+           candidate.count(' ')==0 or\
+           any([aname in names for aname in candidate.split()])):
+               return candidate.replace(' ','_'),txtrest
+    return speakername[0].replace(' ','_'),txt
+
+def process_trans_fave(pklfile):
+    '''
+    Process the transcript to FAVE format. This format has the following info
+    for each column:
+    1. Speaker ID
+    2. Speaker Name
+    3. Beginning Time
+    4. End Time
+    5. Sentences within the timeframe with tags ({LG} for laughter
+       and {NS} for applause)
+       
+    '''
+    data = cp.load(open(pklfile))
+    alldata = json.loads(data['talk_meta']['alldata_JSON'])
+    data['talk_transcript'] = [[anitem.encode('ascii','ignore') \
+            for anitem in apara] for apara in data['talk_transcript']]
+    m = len(data['talk_transcript'])
+    rows=[]
+    for i in range(m):
+        rowdict={}
+        # Time
+        rowdict['beg_time'] = float(data['transcript_micsec'][i])/1000.
+        if i==m-1:
+            rowdict['end_time'] = float(data['talk_meta']['vidlen'])
+        else:
+            rowdict['end_time'] = float(data['transcript_micsec'][i+1])/1000.
+        # speaker name identification
+        firstline = data['talk_transcript'][i][0]
+        allspeakers = [aspeaker['slug'].encode('ascii','ignore').lower()\
+                for aspeaker in alldata['speakers']]
+        speaker,txt = split_speakername(firstline,allspeakers)
+        data['talk_transcript'][i][0] = txt
+        rowdict['speaker_id']=speaker
+        rowdict['speaker_name']=speaker
+        # Process sentences and tags
+        txt = ' '.join(data['talk_transcript'][i])
+        # Clean all tags except laughter and applause
+        txt = re.sub('\([Ll]aug\w*\)','{LG}',txt)
+        txt = re.sub('\([Aa]pplause\)|\([Cc]heer\w*\)|\([Cc]lap\w*\)','{NS}',txt)
+        txt = re.sub('\([\w ]*\)','',txt)
+        lines = sent_tokenize(txt)
+        n = len(lines)
+        rowdict['sentences']=[]
+        rowdict['labels']=[]
+        for j in range(n):
+            tags_st = re.findall('^{LG}|^{NS}|^{LG}\s*{NS}|^{NS}\s*{LS}',\
+                    lines[j].strip())
+            tags_mid = re.match('{LG}|{NS}',\
+                    re.sub('^{LG}|^{NS}|^{LG}\s*{NS}|^{NS}\s*{LS}','',\
+                    lines[j].strip()))
+            #if tags_st or tags_mid:
+            #    import pdb;pdb.set_trace()
+            if tags_st:
+                # If the tags are in the beginning, add tag to previous sentence
+                if j == 0 and i > 0:
+                    # add tag to last line of previous row
+                    rows[-1]['labels'][-1]+=''.join(tags_st)
+                if j > 0:
+                    # add tag to last line (so far) of this row
+                    rowdict['labels'][-1]+=''.join(tags_st)
+            if not tags_mid:
+                # If there is no mid or end tag leave the label field empty
+                rowdict['labels'].append('')
+            else:
+                # otherwise add the mid or end tags to this row
+                rowdict['labels'].append(''.join(tags_mid))
+            # Add the sentence to this row
+            rowdict['sentences'].append(lines[j].strip())
+        # Add the row to list of rows
+        rows.append(rowdict)
+    return rows
+
+def write_trans_fave(rows,filename):
+    '''
+    Given a transcript processed for fave format, it will write the transcript
+    in a csv file following the format.
+    '''
+    with open(filename,'w') as f:
+        writer = csv.DictWriter(f,fieldnames=['speaker_id','speaker_name',\
+                'beg_time','end_time','sentences'])
+        writer.writeheader()
+        for arow in rows:
+            arow['sentences']=' '.join(arow['sentences'])
+            del arow['labels']
+            writer.writerow(arow)
+
 def generate_transcript(data_path):
     '''
     Given the path to TED_meta folder, generates all the
