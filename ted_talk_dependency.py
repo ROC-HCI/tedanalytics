@@ -103,10 +103,12 @@ def process_trans_fave(pklfile):
                     lines[j].strip()))
             if tags_st:
                 # If the tags are in the beginning, add tag to previous sentence
-                if j == 0 and i > 0:
+                if j == 0 and i > 0 and len(rows)>0 and \
+                        'labels' in rows[-1] and len(rows[-1])>0:
                     # add tag to last line of previous row
                     rows[-1]['labels'][-1]+=''.join(tags_st)
-                if j > 0:
+                if j > 0 and 'labels' in rowdict \
+                        and len(rowdict['labels'])>0:
                     # add tag to last line (so far) of this row
                     rowdict['labels'][-1]+=''.join(tags_st)
             if not tags_mid:
