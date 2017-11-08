@@ -19,7 +19,8 @@ It also updates the pickle file (in place) with the dependency information.
 It must run from within the brianlow/syntaxnet docker container default path.
 '''
 
-names = cp.load(open('names.pkl'))['names']
+path,filename = os.path.split(os.path.realpath(__file__))
+names = cp.load(open(os.path.join(path,'names.pkl')))['names']
 
 def split_speakername(txt,speakername):
     '''
