@@ -100,8 +100,6 @@ def process_trans_fave(pklfile):
             tags_mid = re.match('{LG}|{NS}',\
                     re.sub('^{LG}|^{NS}|^{LG}\s*{NS}|^{NS}\s*{LS}','',\
                     lines[j].strip()))
-            #if tags_st or tags_mid:
-            #    import pdb;pdb.set_trace()
             if tags_st:
                 # If the tags are in the beginning, add tag to previous sentence
                 if j == 0 and i > 0:
@@ -122,19 +120,35 @@ def process_trans_fave(pklfile):
         rows.append(rowdict)
     return rows
 
-def write_trans_fave(rows,filename):
+def write_trans_fave(rows,filestream):
     '''
     Given a transcript processed for fave format, it will write the transcript
     in a csv file following the format.
     '''
-    with open(filename,'w') as f:
-        writer = csv.DictWriter(f,fieldnames=['speaker_id','speaker_name',\
-                'beg_time','end_time','sentences'])
-        writer.writeheader()
-        for arow in rows:
-            arow['sentences']=' '.join(arow['sentences'])
-            del arow['labels']
-            writer.writerow(arow)
+    writer = csv.DictWriter(filestream,fieldnames=['speaker_id','speaker_name',\
+            'beg_time','end_time','sentences'])
+    writer.writeheader()
+    for arow in rows:
+        arow['sentences'] = ' '.join(arow['sentences'])
+        del arow['labels']
+        writer.writerow(arow)
+
+def process_trans_syntaxnet(rows):
+    '''
+    Creates a new-line separated list of sentences from the fave transcript
+    in order to pass through syntaxnet. Cleans the empty lines, tag only lines
+    and changes the case to lower. Keeps a backpointer to trace back the
+    original sentence once the dependency tree is obtained.
+    '''
+    bp=[]
+    txt=[]
+    for j,arow in enumerate(rows):
+        for i,asent in enumerate(arow['sentences']):
+            sent = re.sub('{LG}|{NS}','',asent).strip().lower()
+            if sent:
+                txt.append(sent)
+                bp.append((j,i))
+    return '\n'.join(txt),bp
 
 def generate_transcript(data_path):
     '''
@@ -143,19 +157,13 @@ def generate_transcript(data_path):
     '''
     pkl_path = os.path.join(data_path,'TED_meta/*.pkl')
     for pkl_file in glob.glob(pkl_path):
+        rows = process_trans_fave(pkl_file)
+        txt,bp = process_trans_syntaxnet(rows)
+        txt=txt.replace('"','')
         pkl_id = int(os.path.split(pkl_file)[-1].split('.')[0])
-        data = cp.load(open(pkl_file))
-        txt = ' '.join([aline.encode('ascii','ignore').lower()\
-                for apara in data['talk_transcript'] for aline in apara])
-	# Remove the parenthesized items (tags)
-        txt = re.sub('\([a-zA-Z]*?\)','',txt)
-        # Remove everything except alpha neumeric, space and punctiation
-        # after sentence tokenization. Then join the sentences with newline.
-        txt = '\n'.join([re.sub('[^\w\ ,.!?;\']','',asent) for asent in sent_tokenize(txt)])
-        yield pkl_id,txt
+        yield pkl_id,txt,rows,bp
 
-def get_dep_tree(txt,
-    shellname='syntaxnet/demo.sh'):
+def get_dep_tree(txt,shellname='syntaxnet/demo.sh'):
     '''
     Parses a query using syntaxnet.
     '''
@@ -215,7 +223,6 @@ def segment_gen(inp_gen):
         # Close off the last tree
         retval+=parsetree+']'*(currlevel+2)
         yield retval
-    
 
 def segment_gen_conll(inp_gen):
     '''
@@ -258,7 +265,7 @@ def pipeline(startid,endid):
     # Iterator for generating the transcript from the input folder
     transc_iter = generate_transcript(ted_data_path)
     # Iterate over the transcripts
-    for pkl_id, atranscript in transc_iter:
+    for pkl_id,atranscript,rows,bp in transc_iter:
         # skip out of range pkl files
         if pkl_id < startid or pkl_id >= endid:
             continue
@@ -279,16 +286,28 @@ def pipeline(startid,endid):
             allparse_conll.append(dtree_conll)
 	# Open Pickle file
 	pkl_filename = os.path.join(ted_data_path,'TED_meta/'+str(pkl_id)+'.pkl')
-        pkl_outfilename = os.path.join(ted_data_path,'TED_meta_with_dependency/'+str(pkl_id)+'.pkl')
+        pkl_outfilename = os.path.join(ted_data_path,\
+                'TED_meta_with_dependency/'+str(pkl_id)+'.pkl')
         data_in = cp.load(open(pkl_filename))
-        data_in['trans_dep_sentences']=allsent
-        data_in['trans_dep_trees_rec']=allparse
-        data_in['trans_dep_trees_conll']=allparse_conll
+        # Clean old junk if they exist
+        if 'trans_dep_sentences' in data_in:
+            del data_in['trans_dep_sentences']
+        if 'trans_dep_trees_rec' in data_in:
+            del data_in['trans_dep_trees_rec']
+        if 'trans_dep_trees_conll' in data_in:
+            del data_in['trans_dep_trees_conll']
+        # Add new data
+        data_in['dep_trees_conll']=allparse_conll
+        data_in['dep_trees_recur']=allparse
+        data_in['fave_style_transcript']=rows
+        data_in['dep_2_fave']=bp
         # Save updated meta
         with open(pkl_outfilename,'wb') as f:
             cp.dump(data_in,f)
 
 if __name__=='__main__':
+    # Debug
+    #pipeline(1,10)
     p1 = Process(target=pipeline,args=(1,725))
     p1.start()
     p2 = Process(target=pipeline,args=(725,1450))
@@ -298,12 +317,4 @@ if __name__=='__main__':
     p4 = Process(target=pipeline,args=(2175,2900))
     p4.start()
  
-
-
-
-
-
-
-
-
 
