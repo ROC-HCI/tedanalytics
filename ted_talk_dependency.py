@@ -49,7 +49,10 @@ def split_speakername(txt,speakername):
            candidate.count(' ')==0 or\
            any([aname in names for aname in candidate.split()])):
                return candidate.replace(' ','_'),txtrest
-    return speakername[0].replace(' ','_'),txt
+    if speakername:
+        return speakername[0].replace(' ','_'),txt
+    else:
+        return 'no_name',txt
 
 def process_trans_fave(pklfile):
     '''
@@ -103,14 +106,18 @@ def process_trans_fave(pklfile):
                     lines[j].strip()))
             if tags_st:
                 # If the tags are in the beginning, add tag to previous sentence
-                if j == 0 and i > 0 and len(rows)>0 and \
-                        'labels' in rows[-1] and len(rows[-1])>0:
+                if j == 0 and i > 0 and len(rows)>0:
                     # add tag to last line of previous row
-                    rows[-1]['labels'][-1]+=''.join(tags_st)
-                if j > 0 and 'labels' in rowdict \
-                        and len(rowdict['labels'])>0:
+                    try:
+                        rows[-1]['labels'][-1]+=''.join(tags_st)
+                    except IndexError:
+                        pass
+                if j > 0:
                     # add tag to last line (so far) of this row
-                    rowdict['labels'][-1]+=''.join(tags_st)
+                    try:
+                        rowdict['labels'][-1]+=''.join(tags_st)
+                    except IndexError:
+                        pass
             if not tags_mid:
                 # If there is no mid or end tag leave the label field empty
                 rowdict['labels'].append('')
@@ -272,6 +279,13 @@ def pipeline(startid,endid):
         # skip out of range pkl files
         if pkl_id < startid or pkl_id >= endid:
             continue
+        pkl_filename = os.path.join(ted_data_path,'TED_meta/'+str(pkl_id)+'.pkl')
+        pkl_outfilename = os.path.join(ted_data_path,\
+                'TED_meta_with_dependency/'+str(pkl_id)+'.pkl')
+        # Skip if already exists
+        if os.path.exists(pkl_outfilename):
+            continue
+
 	# Get an iterator for the recursive style dependency tree
         dtree = get_dep_tree(atranscript)
 	dtree_iter = segment_gen(dtree)
@@ -288,10 +302,7 @@ def pipeline(startid,endid):
             allparse.append(parse)
             allparse_conll.append(dtree_conll)
 	# Open Pickle file
-	pkl_filename = os.path.join(ted_data_path,'TED_meta/'+str(pkl_id)+'.pkl')
-        pkl_outfilename = os.path.join(ted_data_path,\
-                'TED_meta_with_dependency/'+str(pkl_id)+'.pkl')
-        data_in = cp.load(open(pkl_filename))
+	data_in = cp.load(open(pkl_filename))
         # Clean old junk if they exist
         if 'trans_dep_sentences' in data_in:
             del data_in['trans_dep_sentences']
