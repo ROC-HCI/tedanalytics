@@ -4,6 +4,7 @@ import shutil
 import cPickle as cp
 import numpy as np
 import math
+from multiprocessing import Process
 from nltk.tokenize import sent_tokenize
 from bluemix_key import *
 from TED_data_location import ted_data_path
@@ -20,7 +21,7 @@ credential in the bluemix_key file.
 '''
 
 # Use the bluemix api to extract tones
-def fetch_partial_annotations():
+def fetch_partial_annotations(startidx,endidx):
     # Create all paths
     metafolder = os.path.join(ted_data_path,'TED_meta/')
     outfolder = os.path.join(ted_data_path,\
@@ -36,7 +37,8 @@ def fetch_partial_annotations():
 
     # Start processing
     for atalk in all_valid_talks:
-        if atalk in full_score or atalk in part_score:
+        if atalk<startidx or atalk>endidx or  atalk in full_score\
+                or atalk in part_score:
             print 'skipping:',atalk
             continue
         filename = os.path.join(metafolder,str(atalk)+'.pkl')
@@ -92,9 +94,10 @@ def parse_sentence_tone(senttone_list):
 
 # Bluemax gives tone only for the first 100 sentences. 
 # This function gets the remaining annotations
-def fetch_remaining_annotations(talksdir='TED_meta/',
-                                outdir='TED_feature_bluemix_scores/',
-                                partdir='TED_bm_partial/'):
+def fetch_remaining_annotations(startidx,endidx,
+        talksdir='TED_meta/',
+        outdir='TED_feature_bluemix_scores/',
+        partdir='TED_bm_partial/'):
     # Create all paths
     metafolder = os.path.join(ted_data_path,talksdir)
     outfolder = os.path.join(ted_data_path,outdir)
@@ -131,7 +134,7 @@ def fetch_remaining_annotations(talksdir='TED_meta/',
             continue
         else:
             # This is the partial score data
-            existingdata = cp.load(src)
+            existingdata = cp.load(open(src))
             # Mark pickles without sentence-wise score
             if not existingdata.get('sentences_tone'):
                 print 'Sentence-wise annotation not found.'\
@@ -167,14 +170,20 @@ def fetch_remaining_annotations(talksdir='TED_meta/',
                 old_sentid = output[i]['sentence_id']
             cp.dump(existingdata,open(dst,'wb'))
 
+def pipeline(st,en):
+    fetch_partial_annotations(st,en)
+    fetch_remaining_annotations(st,en)
 
 
-
-
-
-
-
-
+if __name__=='__main__':
+    p1 = Process(target=pipeline,args=(1,725))
+    p1.start()
+    p2 = Process(target=pipeline,args=(725,1450))
+    p2.start()
+    p3 = Process(target=pipeline,args=(1450,2175))
+    p3.start()
+    p4 = Process(target=pipeline,args=(2175,2900))
+    p4.start() 
 
 
 
