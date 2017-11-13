@@ -1,4 +1,5 @@
 import os
+import json
 import cPickle as cp
 from TED_data_location import ted_data_path
 
@@ -27,6 +28,7 @@ def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
     else:
         for (i,j),adep,bdep in zip(data['dep_2_fave'],\
                 data['dep_trees_recur'],data['dep_trees_conll']):
+            bdep=json.loads(bdep)
             # Label
             label = True if \
                     data['fave_style_transcript'][i]['labels'][j]==tag_type\
@@ -55,6 +57,7 @@ def dep_rating_data(talk_id,dep_type='recur'):
     for (i,j),adep,bdep in zip(data['dep_2_fave'],\
             data['dep_trees_recur'],\
             data['dep_trees_conll']):
+        bdep = json.loads(bdep)
         # Sentence
         sent = data['fave_style_transcript'][i]['sentences'][j]
         if dep_type == 'both':
