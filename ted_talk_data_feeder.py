@@ -31,7 +31,6 @@ def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
             label = True if \
                     data['fave_style_transcript'][i]['labels'][j]==tag_type\
                     else False
-            print label
             # Sentence
             sent = data['fave_style_transcript'][i]['sentences'][j]
             yield adep,bdep,label,(i,j),sent
