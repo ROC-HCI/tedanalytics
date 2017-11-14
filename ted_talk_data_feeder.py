@@ -1,7 +1,8 @@
 import os
 import json
+import glob
 import cPickle as cp
-from TED_data_location import ted_data_path
+from TED_data_location import ted_data_path, wordvec_path
 
 def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
     '''
@@ -28,7 +29,6 @@ def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
     else:
         for (i,j),adep,bdep in zip(data['dep_2_fave'],\
                 data['dep_trees_recur'],data['dep_trees_conll']):
-            bdep=json.loads(bdep)
             # Label
             label = True if \
                     data['fave_style_transcript'][i]['labels'][j]==tag_type\
@@ -57,7 +57,6 @@ def dep_rating_data(talk_id,dep_type='recur'):
     for (i,j),adep,bdep in zip(data['dep_2_fave'],\
             data['dep_trees_recur'],\
             data['dep_trees_conll']):
-        bdep = json.loads(bdep)
         # Sentence
         sent = data['fave_style_transcript'][i]['sentences'][j]
         if dep_type == 'both':
@@ -70,4 +69,57 @@ def dep_rating_data(talk_id,dep_type='recur'):
             raise IOError('wrong value for dep_type')
     return alldat,ratedict_processed
 
+def build_ted_vocab():
+    '''
+    Constructs a vocabulary for TED dataset (in unicode)
+    '''
+    ted_vocab=set()
+    ted_meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
+    for atalk in glob.glob(ted_meta_path):
+        print atalk
+        data = cp.load(open(atalk))
+        for aline in data['dep_trees_conll']:
+            for aword in [anode[0].encode('ascii','ignore').strip()\
+                    for anode in aline]:
+                if not aword in ted_vocab:
+                    ted_vocab.add(aword)
+    return ted_vocab
+
+def crop_glove_dictionary():
+    '''
+    This function creates a reduced version of the glove word2vec dictionary 
+    by deleting all the words that did not appear in the ted talk vocabulary.
+    '''
+    print 'building ted vocab'
+    ted_vocab = build_ted_vocab(ted_data_path)
+    print 'TED Vocabulary size',len(ted_vocab)
+    with open(wordvec_path) as fin:
+        with open(wordvec_path+'_cropped','wb') as fout:
+            rows=[]
+            print 'reading glove w2v'
+            for i,aline in enumerate(fin):
+                if i%100000==0:
+                    print i
+                splt_line = aline.strip().split()
+                # read the line words in unicode
+                if splt_line[0].strip() in ted_vocab:
+                    rows.append(splt_line)
+                    ted_vocab.remove(splt_line[0])
+            print ted_vocab
+            print '# of words from TED found in glove word2vec',len(rows)
+            print 'writing cropped glove w2v dict'
+            for arow in sorted(rows):
+                fout.write(' '.join(arow)+'\n')
+
+def read_crop_glove():
+    '''
+    Reads the cropped glove file and returns a dictionary mapping every
+    word into its corresponding glove vector.
+    '''
+    retdict = {}
+    with open(wordvec_path+'_cropped') as fin:
+        for aline in fin:
+            splt_line = aline.strip().split()
+            retdict[splt_line[0]]=map(float,splt_line[1:])
+    return retdict
 
