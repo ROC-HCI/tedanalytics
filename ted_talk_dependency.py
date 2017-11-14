@@ -68,7 +68,9 @@ def process_trans_fave(pklfile):
     '''
     data = cp.load(open(pklfile))
     alldata = json.loads(data['talk_meta']['alldata_JSON'])
-    data['talk_transcript'] = [[anitem.encode('ascii','ignore') \
+    # The transcripts must be preprocessed and simplified
+    data['talk_transcript'] = [[re.sub('[^\w\s\(\)\'\.\,\?\!\-\:]*',' ',\
+            anitem.encode('ascii','ignore')) \
             for anitem in apara] for apara in data['talk_transcript']]
     m = len(data['talk_transcript'])
     rows=[]
