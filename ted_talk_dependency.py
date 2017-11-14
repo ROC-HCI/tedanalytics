@@ -299,8 +299,8 @@ def pipeline(startid,endid):
         for dtree,dtree_conll in izip(dtree_iter,dtree_conll_iter):
             sentence,parse = dtree.split('\t')
             allsent.append(sentence)
-            allparse.append(parse)
-            allparse_conll.append(dtree_conll)
+            allparse.append(json.loads(parse))
+            allparse_conll.append(json.loads(dtree_conll))
 	# Open Pickle file
 	data_in = cp.load(open(pkl_filename))
         # Clean old junk if they exist

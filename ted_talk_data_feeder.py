@@ -37,7 +37,6 @@ def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
             sent = data['fave_style_transcript'][i]['sentences'][j]
             yield adep,bdep,label,(i,j),sent
 
-
 def dep_rating_data(talk_id,dep_type='recur'):
     ''' 
     Given a talk_id, it generates the meta information and returns
@@ -68,6 +67,14 @@ def dep_rating_data(talk_id,dep_type='recur'):
         else:
             raise IOError('wrong value for dep_type')
     return alldat,ratedict_processed
+
+def dep_pos_vocab():
+    '''
+    Returns list and index dictionary for dependency types and POS's.
+    '''
+    filename = os.path.join(ted_data_path,'misc/dep_pos_list.pkl')
+    data = cp.load(open(filename))
+    return data['deplist'],data['depidx'],data['poslist'],data['posidx']
 
 def build_ted_vocab():
     '''
