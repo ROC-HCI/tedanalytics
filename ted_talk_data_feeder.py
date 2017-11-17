@@ -68,9 +68,11 @@ def dep_rating_data(talk_id,dep_type='recur'):
             raise IOError('wrong value for dep_type')
     return alldat,ratedict_processed
 
-def dep_pos_vocab():
+def read_dep_pos_vocab():
     '''
     Returns list and index dictionary for dependency types and POS's.
+    returns a tuple of dependency list, dependency index dictionary,
+    parts of speech list, and parts of speech index dictionary.
     '''
     filename = os.path.join(ted_data_path,'misc/dep_pos_list.pkl')
     data = cp.load(open(filename))
@@ -98,7 +100,7 @@ def crop_glove_dictionary():
     by deleting all the words that did not appear in the ted talk vocabulary.
     '''
     print 'building ted vocab'
-    ted_vocab = build_ted_vocab(ted_data_path)
+    ted_vocab = build_ted_vocab()
     print 'TED Vocabulary size',len(ted_vocab)
     with open(wordvec_path) as fin:
         with open(wordvec_path+'_cropped','wb') as fout:
@@ -129,4 +131,5 @@ def read_crop_glove():
             splt_line = aline.strip().split()
             retdict[splt_line[0]]=map(float,splt_line[1:])
     return retdict
+
 
