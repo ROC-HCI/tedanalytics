@@ -80,7 +80,7 @@ def read_dep_pos_vocab():
 
 def build_ted_vocab():
     '''
-    Constructs a vocabulary for TED dataset (in unicode)
+    Constructs a vocabulary for TED dataset
     '''
     ted_vocab=set()
     ted_meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
@@ -132,4 +132,12 @@ def read_crop_glove():
             retdict[splt_line[0]]=map(float,splt_line[1:])
     return retdict
 
-
+def traverse(atree,level=0):
+    '''
+    Recursively travarses and prints a dependency tree
+    '''
+    for anode in atree:
+        if type(anode)==str or type(anode)==unicode:
+            print '-'*level,anode
+        elif type(anode)==list:
+            travarse(anode,level+1)
