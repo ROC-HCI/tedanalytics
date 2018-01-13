@@ -1,11 +1,14 @@
 from list_of_talks import all_valid_talks
 from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
 import ted_talk_cluster_analysis as tca
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import sklearn as sl
 import sklearn.metrics as met
-import matplotlib.pyplot as plt
 
 kwlist = ['beautiful', 'ingenious', 'fascinating',
             'obnoxious', 'confusing', 'funny', 'inspiring',
@@ -62,7 +65,7 @@ def traintest_idx(N,testsize=0.3):
     trainidx = [i for i in xrange(N) if not i in testidx]
     return trainidx,testidx
 
-def discretizeY(Y,col):
+def discretizeY(Y,col,firstThresh=33.3333,secondThresh=66.6666):
     '''
     Discretize and returns and specific column of Y. The strategy is:
     to keep the data with score <=33rd percentile be the "low" group,
@@ -72,8 +75,8 @@ def discretizeY(Y,col):
     y = Y[:,col]
     if kwlist[col] == 'Totalviews':
         y=np.log(y)
-    lowthresh = sp.percentile(y,33.3333)
-    hithresh = sp.percentile(y,66.6666)
+    lowthresh = sp.percentile(y,firstThresh)
+    hithresh = sp.percentile(y,secondThresh)
     y[y<=lowthresh] = -1    # Low group
     y[y>=hithresh] = 1      # High group
     y[(y>lowthresh)*(y<hithresh)] = 0   # Medium group
@@ -82,9 +85,18 @@ def discretizeY(Y,col):
 def binarize(X,y):
     '''
     Keeps only the good and bad parts in the data. Drops the medium part.
+    But if there is only two part, then just repair the labels
     '''
-    idxmed = y!=0
-    return X[idxmed,:],y[idxmed]
+    unqy = np.unique(y)
+    if len(unqy)==3:
+        idxmed = y!=0
+        return X[idxmed,:],y[idxmed]
+    elif len(unqy)==2 and 0 in unqy and -1 in unqy:
+        y[y==0]=1
+        return X,y
+    else:
+        raise IOError
+    
 
 def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
         ROCTitle=None,outfilename='./plots/'):
@@ -105,7 +117,8 @@ def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
         auc = met.roc_auc_score(y_test,y_score)
         print 'AUC:',auc
         fpr,tpr,_ = sl.metrics.roc_curve(y_test,y_score,pos_label=1)        
-        plt.figure()
+        plt.figure(0)
+        plt.clf()
         plt.plot(fpr,tpr,color='darkorange',label='ROC Curve (AUC={0:0.2f})'.\
             format(auc))
         plt.xlabel('False Positive Rate')
@@ -117,8 +130,8 @@ def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
             plt.show()
         else:
             plt.savefig(outfilename+ROCTitle+'.eps')
+            plt.close()
         
-
 def regressor_eval(regressor_trained,X_test,y_test):
     y_pred = regressor_trained.predict(X_test)
     print 'Corr.Coeff:{0:2.2f} '.format(np.corrcoef(y_test,y_pred)[0,1]),
@@ -157,12 +170,12 @@ def train_with_CV(X,y,predictor,cvparams,
         scorer = sl.metrics.make_scorer(met.r2_score)
     # Perform cross-validation
     randcv = sl.model_selection.RandomizedSearchCV(predictor,cvparams,
-        n_iter=nb_iter,scoring=scorer,cv=Nfold)
+                n_iter=nb_iter,scoring=scorer,cv=Nfold)
+    
     randcv.fit(X,y)
     y_pred = randcv.best_estimator_.predict(X)
     print 'Report on Training Data'
     print '-----------------------'
-    print 'Best parameters:',randcv.best_params_
     print 'Best Score:',randcv.best_score_
     # Evaluate the predictor
     if predictor_type=='classifier':

@@ -9,8 +9,9 @@ import sklearn as sl
 import scipy as sp
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
-# This python file is for enlisting all the experiments we are doing
+# This python file enlists many experiments we have done.
 # It can also be used as sample usage of the code repository such as
 # the sentiment_comparator class. Instead of running this file like a python
 # script, try running it like a python notebook. For each experiment,
@@ -264,7 +265,6 @@ def see_sentences_percent(talkid,start=50,end=60,selected_scores=None):
 def time_avg_hi_lo_ratings():
     '''
     Experiment on High/Low ratings
-    This Version was edited by Samiha
     '''
     avg_saved = np.array([])
     i = 0
@@ -279,13 +279,6 @@ def time_avg_hi_lo_ratings():
             )
         avg_,p = compar.calc_time_mean()
         avg_saved = np.append(avg_saved, avg_)
-        ###----------------had to close it to access radarplot.py------------
-        #ts.draw_time_mean_sentiments(avg_, # time averages
-         #   comparator.column_names,       # name of the columns
-          #  p,                             # p values                      
-           # outfilename='./plots/'+titl+'.eps'
-            #)
-        ##----------------------------------------------------------------
  
     return avg_saved
 
@@ -500,6 +493,8 @@ def classify_Good_Bad(scores,Y,classifier='LinearSVM'):
         print 'Predictor:',classifier
         y = tp.discretizeY(Y,i)
         X_bin,y_bin = tp.binarize(X,y)
+        m = len(y_bin)
+        
         # Split in training and test data
         tridx,tstidx = tp.traintest_idx(len(y_bin))
         trainX,trainY = X_bin[tridx,:],y_bin[tridx]
@@ -509,16 +504,9 @@ def classify_Good_Bad(scores,Y,classifier='LinearSVM'):
         if classifier == 'LinearSVM':
             clf = sl.svm.LinearSVC()
             # Train with training data
-            try:
-                clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=10.)},nb_iter=50,
+            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,\
+                    {'C':sp.stats.expon(scale=5.)},nb_iter=100,\
                     datname = kw+'_LibSVM')
-            except ImportError:
-                raise
-            except:
-                print 'Data is badly scaled for',kw
-                print 'skiping'
-                continue
             # Evaluate with test data
             print 'Report on Test Data'
             print '-----------------------'            
@@ -545,20 +533,20 @@ def classify_Good_Bad(scores,Y,classifier='LinearSVM'):
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
                 'ROC of SVM_RBF on Test Data for '+kw)
+        elif classifier == 'logit':
+            clf = sl.linear_model.LogisticRegression()
+            # Train with training data
+            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
+                    {'C':sp.stats.expon(scale=1)},
+                    nb_iter=100,datname=kw)
+            # Evaluate with test data
+            print 'Report on Test Data'
+            print '-----------------------'                 
+            # Evaluate with test data
+            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
+                'ROC of SVM_RBF on Test Data for '+kw)
 
-def classify_good_bad_raw_score():
-    pass
-
-def classify_multiclass():
-    pass
-
-def regress_totalviews_powerlaw():
-    pass
-
-def classify_totalviews_powerlaw():
-    pass
-
-def regress_ratings(scores,Y,regressor='ridge',cv_score=sl.metrics.r2_score):
+def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
     '''
     Try to predict the ratings using regression methods. Besides training
     the regressors, it also evaluates them.
@@ -631,22 +619,45 @@ def regress_ratings(scores,Y,regressor='ridge',cv_score=sl.metrics.r2_score):
             tp.regressor_eval(rgrs_trained,testX,testY)
 
 if __name__=='__main__':
-    # plot_statistics()
-    # plot_correlation()
-    # bluemix_plot1()
-    # bluemix_plot2()
-    # bluemix_plot3()
-    # bluemix_plot4()
-    # bluemix_plot5()
-    # single_plot()
-    # time_avg_hi_lo_ratings_original()
-    # grp_avg_hilo_ratings([[1,2],[5,6],[10,12]])
-    # -------- Clustering Experiments ---------
+    infolder = './talks/'
+    outfolder = './TED_stats/'
+    if not os.path.exists('./plots'):
+        os.makedirs('./plots')
+    print '============================================'
+    print '============= Ignore Warnings =============='
+    print 'Note: The results change at each run due to '
+    print 'randomness involved in the predictors       '
+    print '============================================'
+    print '###### Calculcating dataset statistics #####'
+    plot_statistics(infolder,outfolder)
+    print '###### Check results in TED_stats folder ###'
+    print '##############################################'
+    print 'Calculcating dataset statistics (correlations)'
+    plot_correlation(False,infolder,outfolder)
+    print 'Check results in TED_stats folder'
+    print '##############################################'
+
+    print '############ Loading sentiment data ##########'
+    comp = ts.Sentiment_Comparator({'all':all_valid_talks},\
+        ts.read_bluemix)
+    print '############ Calculating global means ########'
+    draw_global_means(comp)
+    print '####### Check results in the plots folder#####'
+
+    print '##### Loading data for cluster analysis ######'
     X,comp = tca.load_all_scores()
-    # draw_global_means(X,comp)
-    # kmeans_clustering(X,comp)
-    # kmeans_separate_stand(X,comp)
+    print '######## Performing cluster analysis #########'
     evaluate_clusters_pretty(X,comp,outfilename='./plots/')
-    # -------- Classification Experiments -----
-    # scores,Y,_ = tp.loaddata()
-    # classify_Good_Bad(scores,Y)
+    print '###### Check results in the plot folder ######'
+   
+    print '### Loading dataset for classif. and regr. ###'
+    scores,Y,_ = tp.loaddata()
+    print '######### Experimenting on regression ########'
+    print 'try: ridge, SVR, gp, lasso'
+    regress_ratings(scores,Y,regressor='SVR',\
+        cv_score=sl.metrics.r2_score)
+    print '###### Experimenting on classification #######'
+    print 'try: LinearSVM, SVM_RBF and logit'
+    classify_Good_Bad(scores,Y,classifier='LinearSVM')
+    print 'Done!'
+    
