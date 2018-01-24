@@ -2,42 +2,42 @@ import os
 import json
 import glob
 import cPickle as cp
+import numpy as np
+from list_of_talks import all_valid_talks
 from TED_data_location import ted_data_path, wordvec_path
 
-def gen_dep_tag_data(talk_id,dep_type='recur',tag_type='{LG}'):
+def split_train_test(train_ratio=0.7):
+    '''
+    Split the list of valid talk id's in training and test sets.
+    '''
+    m = len(all_valid_talks)
+    train = np.random.choice(all_valid_talks,int(train_ratio*m),\
+        replace=False).tolist()
+    test = list(set(all_valid_talks) - set(train))
+    return train,test
+
+def generate_dep_tag(talk_id,dep_type='recur',tag_type='{LG}'):
     '''
     Given a talk_id, it generates the dependency tree and the tag information.
-    The dep_type can take three values: 'recur' means dependency tree in
-    recursive format, 'conll' means conll format. If dep_type is assigned
-    to 'both', the generator will generate both kinds of the dependency
-    trees.
+    The dep_type can take two values: 'recur' means dependency tree in
+    recursive format, 'conll' means conll format.
     The tag_type takes two values: '{LG}' means laughter followed by the
     sentence. {NS} means applause
     '''
     filename = os.path.join(ted_data_path,'TED_meta/'+str(talk_id)+'.pkl')
     data = cp.load(open(filename))
-    if not dep_type=='both':
-        for (i,j),adep in zip(data['dep_2_fave'],\
-                data['dep_trees_'+dep_type]):
-            # Tag label
-            label = True if \
-                    data['fave_style_transcript'][i]['labels'][j]==tag_type\
-                    else False
-            # sentence
-            sent = data['fave_style_transcript'][i]['sentences'][j]
-            yield adep,label,(i,j),sent
-    else:
-        for (i,j),adep,bdep in zip(data['dep_2_fave'],\
-                data['dep_trees_recur'],data['dep_trees_conll']):
-            # Label
-            label = True if \
-                    data['fave_style_transcript'][i]['labels'][j]==tag_type\
-                    else False
-            # Sentence
-            sent = data['fave_style_transcript'][i]['sentences'][j]
-            yield adep,bdep,label,(i,j),sent
+    for (i,j),adep in zip(data['dep_2_fave'],\
+            data['dep_trees_'+dep_type]):
+        # Tag label
+        label = 1 if \
+                data['fave_style_transcript'][i]['labels'][j]==tag_type\
+                else 0
+        # sentence
+        sent = data['fave_style_transcript'][i]['sentences'][j]
+        # yield only one kind of dependency
+        yield adep,label,(i,j),sent
 
-def dep_rating_data(talk_id,dep_type='recur'):
+def get_dep_rating(talk_id,dep_type='recur'):
     ''' 
     Given a talk_id, it generates the meta information and returns
     the dependency tree and the corresponding ground truth ratings.
@@ -85,23 +85,36 @@ def build_ted_vocab():
     ted_vocab=set()
     ted_meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
     for atalk in glob.glob(ted_meta_path):
-        print atalk
-        data = cp.load(open(atalk))
-        for aline in data['dep_trees_conll']:
-            for aword in [anode[0].encode('ascii','ignore').strip()\
-                    for anode in aline]:
-                if not aword in ted_vocab:
-                    ted_vocab.add(aword)
+        path,filename = os.path.split(atalk)
+        print filename
+        # Travarse through all dependency trees for all words
+        for adep,_,_,_ in generate_dep_tag(int(filename[:-4])):
+            allwords = __traverse__(adep)
+            for aword in allwords:
+                # Add the word
+                ted_vocab.add(aword)
+                # If the word contains hyphen or period, split them and add
+                # them as well. Also add a hypen and periodless version because
+                # these things often cause confusions. This will be required
+                # when the engine would try to resolve unfound words.
+                if '-' in aword:
+                    ted_vocab.update(aword.split('-'))
+                    ted_vocab.add(aword.replace('-',''))
+                if '.' in aword:
+                    ted_vocab.update(aword.split('.'))
+                    ted_vocab.add(aword.replace('.',''))
+                
+    print 'Total size of vocabulary:',len(ted_vocab)
     return ted_vocab
 
 def crop_glove_dictionary():
     '''
     This function creates a reduced version of the glove word2vec dictionary 
     by deleting all the words that did not appear in the ted talk vocabulary.
+    TODO: Incomplete
     '''
     print 'building ted vocab'
     ted_vocab = build_ted_vocab()
-    print 'TED Vocabulary size',len(ted_vocab)
     with open(wordvec_path) as fin:
         with open(wordvec_path+'_cropped','wb') as fout:
             rows=[]
@@ -110,13 +123,11 @@ def crop_glove_dictionary():
                 if i%100000==0:
                     print i
                 splt_line = aline.strip().split()
-                # read the line words in unicode
-                if splt_line[0].strip() in ted_vocab:
+                # Check if the word is found in ted vocabulary 
+                if splt_line[0] in ted_vocab:
                     rows.append(splt_line)
                     ted_vocab.remove(splt_line[0])
-            print ted_vocab
-            print '# of words from TED found in glove word2vec',len(rows)
-            print 'writing cropped glove w2v dict'
+            # Writing the cropped glove dictionary
             for arow in sorted(rows):
                 fout.write(' '.join(arow)+'\n')
 
@@ -129,15 +140,20 @@ def read_crop_glove():
     with open(wordvec_path+'_cropped') as fin:
         for aline in fin:
             splt_line = aline.strip().split()
-            retdict[splt_line[0]]=map(float,splt_line[1:])
+            val = map(float,splt_line[1:])
+            retdict[splt_line[0]] = val
     return retdict
 
-def traverse(atree,level=0):
+
+def __traverse__(atree):
     '''
-    Recursively travarses and prints a dependency tree
+    Recursively travarses and returns the words in a dependency tree
     '''
+    words=set()
     for anode in atree:
         if type(anode)==str or type(anode)==unicode:
-            print '-'*level,anode
+            w,p,d = anode.strip().encode('ascii','ignore').split()
+            words.add(w)
         elif type(anode)==list:
-            travarse(anode,level+1)
+            words.update(__traverse__(anode))
+    return words

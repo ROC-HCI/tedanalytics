@@ -17,28 +17,28 @@ class multiLinear(nn.Module):
     def __init__(self,dic_len,in_size,out_size):
         super(multiLinear,self).__init__()
         self.weight = Parameter(torch.randn(dic_len,out_size,in_size))
-        self.bias = Parameter(torch.randn(dic_len,out_size))
+        self.bias = Parameter(torch.randn(dic_len,1,out_size))
     def forward(self,i,x):
-        return torch.matmul(self.weight[i,:,:],x)+self.bias[i,:]
+        return torch.mm(x,self.weight[i,:,:].t())+self.bias[i]
 
-def __def_tensor__(gpunum,listobj):
+def def_tensor(gpunum,listobj):
     '''
     Helper Function.
     This function defines a tensor considering whether or not to use the GPU.
     '''
     if gpunum < 0:
-        return autograd.Variable(torch.Tensor(listobj))
+        return autograd.Variable(torch.Tensor([listobj]))
     else:
         with torch.cuda.device(gpunum):
-            return autograd.Variable(torch.cuda.Tensor(listobj))
+            return autograd.Variable(torch.cuda.Tensor([listobj]))
 
 class SyntacticSemanticEngine(nn.Module):
     '''
     Syntactic Semantic Engine is a new model for representing a dependency
     tree along with the distributed representations of the corresponding words.
     '''
-    def __init__(self,dep_dict,pos_dict,glove_voc,GPUnum=0,sensedim=300,\
-        nonlin=F.relu):
+    def __init__(self,dep_dict,pos_dict,glove_voc,GPUnum=0,sensedim=2,\
+        activation=F.relu,final_activation=F.log_softmax):
         '''
         To initiate, provide dictionaries that map to indices from dependency
         relations (dep_dict) and parts of speech (pos_dict).
@@ -63,28 +63,47 @@ class SyntacticSemanticEngine(nn.Module):
         self.gpu = GPUnum
 
         # Define the network parameters
-        # Initiate dependency embedding for each dependency relation type
-        if self.gpu < 0:
-            self.D = multiLinear(self.d,self.s,self.s)
-        else:
-            self.D = multiLinear(self.d,self.s,self.s).cuda(self.gpu)
-        # Initiate POS Embedding for each POS type
-        if self.gpu < 0:
-            self.P = multiLinear(self.p,self.N,self.s)
-        else:
-            self.P = multiLinear(self.p,self.N,self.s).cuda(self.gpu)
+        self.D = multiLinear(self.d,self.s,self.s)
+        self.P = multiLinear(self.p,self.N,self.s)
+        # self.linear = nn.Linear(self.s,self.outdim)
+        # For GPU
+        if self.gpu >= 0:
+            with torch.cuda.device(self.gpu):
+                self.D = self.D.cuda()
+                self.P = self.P.cuda()
+                # self.linear = self.linear.cuda()
         
-        # Set nonlinearity
-        self.nonlin=nonlin
+        # Set activations
+        self.activation = activation
+        self.final_activation = final_activation
     
-    def __process_node__(self,wvec,pos,dep,hin):
+    def __process_node__(self,w,p,d,hin):
         '''
         Procedure to encode a single node in the tree
         '''
-        # Input word vector
-        xin = __def_tensor__(self.gpu,wvec)
-        u = self.nonlin(self.P(pos,xin)+hin)
-        hout = self.nonlin(self.D(dep,u))
+        wpart_sum = np.array([0. for i in range(self.N)])
+        wpart_count = 0
+        # If the word is not available in the dictionary,
+        # breaking into parts. If that doesn't work either,
+        # just use zero.
+        if w not in self.glove_voc and '-' in w:
+            wparts = w.split('-')
+        elif w not in self.glove_voc and '.' in w:
+            wparts = w.split('.')
+        else:
+            wparts = [w]
+        # acerage wordparts
+        for wpart in wparts:
+            if wpart in self.glove_voc:
+                wpart_sum+=np.array(self.glove_voc[wpart])
+                wpart_count+=1
+        # Final wordvector
+        wvec = wpart_sum/float(wpart_count) if wpart_count>0 else wpart_sum
+        wvec = wvec.tolist()
+        # Actual operation on a node
+        xin = def_tensor(self.gpu,wvec)
+        u = self.activation(self.P(self.pos_dict[p],xin)+hin)
+        hout = self.activation(self.D(self.dep_dict[d],u))
         return hout
 
     def encodetree(self,atree):
@@ -92,6 +111,9 @@ class SyntacticSemanticEngine(nn.Module):
         Recursively encodes a dependency tree to its embedding vector
         '''
         hout_sum = None
+        count = 0.
+        if not atree:
+            raise IOError('Tree cannot be empty')
         for i,anode in enumerate(atree):
             if type(anode) == unicode or type(anode)==str:
                 # lookahead if the next node is a subtree
@@ -100,32 +122,35 @@ class SyntacticSemanticEngine(nn.Module):
                     hin = self.encodetree(atree[i+1])
                 else:
                     # This node doesn't have any child. set hin to zero
-                    hin = __def_tensor__(self.gpu,[0 for i in range(self.s)])
+                    hin = def_tensor(self.gpu,[0 for i in range(self.s)])
                 # Compute the current node
                 w,p,d = anode.strip().encode('ascii','ignore').split()
-                hout = self.__process_node__(self.glove_voc[w],\
-                    self.pos_dict[p],self.dep_dict[d],hin)
+                hout = self.__process_node__(w,p,d,hin)
                 # Add all the children values together
                 if hout_sum is None:
                     hout_sum = hout
+                    count = 1.
                 else:
                     hout_sum+=hout
-        return hout_sum
+                    count+=1.
+        return torch.div(hout_sum,count)
 
     def forward(self,minibatch):
         '''
         Produce the model output of a minibatch
         '''
-        treevec = None
+        minibatch_result = None
         for atree in minibatch:
-            if not atree:
+            if atree is None:
                 raise IOError('Can not contain empty data')
-            if not treevec:
-                treevec = self.encodetree(atree)
+            # Calculate the embedding vector for each component
+            if minibatch_result is None:
+                minibatch_result = self.final_activation(self.encodetree(atree))
             else:
-                temp = self.encodetree(atree)
-                treevec=torch.cat([treevec,temp],dim=0)
-        return treevec
+                temp = self.final_activation(self.encodetree(atree))
+                minibatch_result=torch.cat([minibatch_result,temp],dim=0)
+        return minibatch_result
+        
 
 def __test_encodetree__():
     '''
@@ -136,32 +161,46 @@ def __test_encodetree__():
     '.':[0.4,0.1,0.3],'the':[0.5,0.5,0.5]}
     x = [u'thank VBP ROOT',[u'you PRP dobj',u'much RB advmod',\
     [u'so RB advmod'],u', , punct',u'chris FW dobj',u'. . punct']]
+    x = [x,x]
     _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
     model = SyntacticSemanticEngine(dep_dict,pos_dict,wdict,\
         GPUnum=-1,sensedim=3)
-    y = model.encodetree(x)
+    print 'model input',x
+    y = model(x)
+    print 'model output',y
 
-def test_with_multiLinear():
+def __test_with_multiLinear__():
     '''
     For testing purpose only. This is a simple test to check if the
     multiLinear module works or not.
     Works perfectly.
     '''
+    # dictionary length x input size x output size
     model = multiLinear(2,3,2)
+    # Optimizer
     optimizer = optim.Adam(model.parameters(),lr=0.001)
-    w1 = autograd.Variable(torch.Tensor([[1,0,0],[0,0,-1]]))
-    b1 = autograd.Variable(torch.Tensor([1,1]))
-    w2 = autograd.Variable(torch.Tensor([[0,-1,0],[1,0,0]]))
-    b2 = autograd.Variable(torch.Tensor([2,-2]))
+    # Input and output
+    w1 = autograd.Variable(torch.Tensor([[1,0,0],[0,0,-1]])).t()
+    b1 = autograd.Variable(torch.Tensor([[1,1]]))
+    w2 = autograd.Variable(torch.Tensor([[0,-1,0],[1,0,0]])).t()
+    b2 = autograd.Variable(torch.Tensor([[2,-2]]))
+    # training steps
     for i in range(25000):
-        x1 = autograd.Variable(torch.rand(3))
-        y1 = torch.matmul(w1,x1)+b1
-        x2 = autograd.Variable(torch.rand(3))
-        y2 = torch.matmul(w2,x2)+b2
+        x1 = autograd.Variable(torch.rand(1,3))
+        y1 = torch.mm(x1,w1)+b1
+        print 'input 1',x1
+        print 'output 1',y1
+        x2 = autograd.Variable(torch.rand(1,3))
+        y2 = torch.matmul(x2,w2)+b2
+        print 'input 2',x2
+        print 'output 2',y2
         model.zero_grad()
+        # Calculate the loss
         loss = torch.sqrt(torch.pow(model(0,x1)-y1,2).sum()+\
             torch.pow(model(1,x2)-y2,2).sum())
+        # Calculate gradients by backpropagation and update parameters
         loss.backward()
         optimizer.step()
+        # print loss
         print 'loss =',loss
     print model.state_dict()                    
