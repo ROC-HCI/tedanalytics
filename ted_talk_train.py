@@ -19,7 +19,7 @@ def train_model(model,X,y,optimizer,loss_fn,log_filep):
     '''
     pass
 
-def train_sentencewise(output_folder = 'SSE_result/',
+def train_humor_sentencewise(output_folder = 'SSE_result/',
     sense_dim = 2,
     train_test_ratio = 0.75,
     activation = F.log_softmax,
@@ -52,7 +52,7 @@ def train_sentencewise(output_folder = 'SSE_result/',
     print 'Model Loaded'
     
     # Save the parameters of the function call. It allows me to audit the models
-    with open(os.path.join(outpath,'params.txt'),'wb') as fparam:
+    with open(os.path.join(outpath,output_log),'wb') as fparam:
         fparam.write('sense_dim={}'.format(sense_dim)+'\n')
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
         fparam.write('activation={}'.format(activation.__repr__())+'\n')
@@ -61,10 +61,8 @@ def train_sentencewise(output_folder = 'SSE_result/',
         fparam.write('Optimizer_name={}'.format(optimizer.__repr__())+'\n')
         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
-
-    iter = 0
-    # Write the loss in file
-    with open(os.path.join(outpath,output_log),'wb') as f:
+        iter = 0
+        # Write the loss in file
         for atalk in train_id:
             print 'training',atalk
             # Feed the whole talk as a minibatch
@@ -82,6 +80,7 @@ def train_sentencewise(output_folder = 'SSE_result/',
             # Parameter update
             optimizer.step()
             print 'Loss:',loss.data[0]
+            fparam.write('training {0} loss {1}\n'.format(atalk,loss.data[0]))
     # Save the model
     model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
@@ -105,5 +104,5 @@ def __compute_nllloss__(log_probs,labels,gpunum):
 
 
 if __name__=='__main__':
-    train_sentencewise()
+    train_humor_sentencewise()
 
