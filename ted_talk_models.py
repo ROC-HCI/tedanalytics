@@ -30,7 +30,7 @@ def def_tensor(gpunum,listobj):
         return autograd.Variable(torch.Tensor([listobj]))
     else:
         with torch.cuda.device(gpunum):
-            return autograd.Variable(torch.cuda.Tensor([listobj]))
+            return autograd.Variable(torch.cuda.Tensor([listobj]))        
 
 class SyntacticSemanticEngine(nn.Module):
     '''
@@ -139,16 +139,12 @@ class SyntacticSemanticEngine(nn.Module):
         '''
         Produce the model output of a minibatch
         '''
-        minibatch_result = None
+        minibatch_result = []
         for atree in minibatch:
             if atree is None:
                 raise IOError('Can not contain empty data')
             # Calculate the embedding vector for each component
-            if minibatch_result is None:
-                minibatch_result = self.final_activation(self.encodetree(atree))
-            else:
-                temp = self.final_activation(self.encodetree(atree))
-                minibatch_result=torch.cat([minibatch_result,temp],dim=0)
+            minibatch_result.append(self.final_activation(self.encodetree(atree)))
         return minibatch_result
         
 
