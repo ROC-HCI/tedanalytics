@@ -11,7 +11,7 @@ import glob
 import os
 import re
 import csv
-
+import numpy as np
 '''
 This module extracts the dependency tree for each sentence of the transcript
 located inside the TED_meta pickle file.
@@ -276,6 +276,10 @@ def pipeline(startid,endid):
     make_new_shell()
     # Iterator for generating the transcript from the input folder
     transc_iter = generate_transcript(ted_data_path)
+    # Create output folder if it doesn't exist already
+    outfold_ = os.path.join(ted_data_path,'TED_meta_with_dependency/')
+    if not os.path.exists(outfold_):
+        os.makedirs(outfold_)
     # Iterate over the transcripts
     for pkl_id,atranscript,rows,bp in transc_iter:
         # skip out of range pkl files
@@ -330,7 +334,7 @@ if __name__=='__main__':
     p2.start()
     p3 = Process(target=pipeline,args=(1450,2175))
     p3.start()
-    p4 = Process(target=pipeline,args=(2175,2900))
+    p4 = Process(target=pipeline,args=(2175,np.inf))
     p4.start()
  
 
