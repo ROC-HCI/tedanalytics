@@ -182,7 +182,7 @@ if __name__=='__main__':
     p2.start()
     p3 = Process(target=pipeline,args=(1450,2175))
     p3.start()
-    p4 = Process(target=pipeline,args=(2175,2900))
+    p4 = Process(target=pipeline,args=(2175,np.inf))
     p4.start() 
 
 
