@@ -1,184 +1,562 @@
-(Slurps) :1
-(Kissing) :1
-(Beeping) :2
-(Game) :1
-(Whoosh) :2
-(Applause) :5297
-(Explosion) :7
-(Screeching) :1
-(Hindi) :1
-(English) :17
-(Shouts) :5
-(Percussion) :1
-(Barks) :1
-(Laugther) :2
-(cheering) :1
-(Violin) :1
-(Sirens) :1
-(Audio) :40
-(Thumping) :2
-(video) :3
-(laughter) :1
-(Vocalization) :1
-(Beeps) :9
-(Chatter) :2
-(Guitar) :6
-(Fuzz) :1
-(Frequency) :1
-(Video) :346
-(Dissonance) :1
-(Laughs) :48
-(Honk) :7
-(Piano) :5
-(Mandarin) :1
-(Amendment) :1
-(Noise) :5
-(Unintelligible) :1
-(Chatting) :1
-(Whispering) :1
-(Typewriting) :1
-(Ringing) :6
-(Coughs) :2
-(Siren) :1
-(Clattering) :1
-(Swat) :1
-(Didgeridoo) :1
-(Reading) :1
-(Murmuring) :2
-(Whinny) :1
-(Inaudible) :1
-(Gunshot) :2
-(Cheers) :38
-(Click) :1
-(Rustling) :1
-(Screaming) :4
-(Tone) :1
-(Whirring) :1
-(Typing) :1
-(Mumbles) :1
-(Drums) :8
-(Choking) :1
-(Clang) :1
-(Guzheng) :1
-(Sniffs) :1
-(Whistle) :4
-(Portamento) :1
-(Burst) :1
-(A) :1
-(Grunts) :2
-(Buzzer) :1
-(Rumbling) :2
-(Noises) :1
-(Loud) :1
-(Mumbling) :4
-(Gibberish) :2
-(Hammer) :1
-(Whistles) :1
-(Honking) :2
-(Chanting) :1
-(Static) :3
-(Kiss) :1
-(Snaps) :1
-(Japanese) :4
-(Gunshots) :1
-(Sighs) :15
-(Voices) :1
-(k) :16
-(Snapping) :3
-(Sound) :1
-(Scratching) :1
-(Exhales) :2
-(Together) :1
-(Snores) :1
-(Ding) :3
-(Doorbell) :2
-(Tones) :6
-(Scream) :1
-(Roar) :2
-(Clicks) :1
+(Laughter) :10243
+(Applause) :5462
+(Music) :619
+(Video) :352
+(Audio) :56
+(Laughs) :49
 (Singing) :45
-(Cries) :1
-(Squeaking) :1
-(Laughted) :1
-(Gasp) :3
-(Explosions) :1
-(Clear) :1
-(Shreiks) :1
-(Translator) :2
-(Sings) :13
-(c) :2
-(Inhales) :2
-(Screams) :3
-(Tapping) :1
-(Rapping) :1
-(Spanish) :7
-(Clicking) :8
-(Giggle) :3
-(Clapping) :10
-(Cheering) :16
-(French) :3
-(Cheer) :1
-(Bells) :2
-(b) :1
-(Gasps) :6
-(Snoring) :1
-(Buzzing) :2
-(Silence) :4
-(Groan) :1
-(Rattling) :5
-(Cymbal) :1
-(Punch) :2
-(Whistling) :17
-(Nonsense) :2
-(Dryer) :1
-(Airplane) :1
-(Barking) :2
-(Recording) :6
-(Jackhammer) :1
-(Braying) :1
-(Crackling) :3
-(Feedback) :1
-(Sobs) :2
-(Growling) :2
-(Breathing) :1
-(Sitar) :1
-(Crying) :2
-(Laugher) :4
-(Speaks) :4
-(Claps) :7
-(Beep) :12
-(Audience) :11
-(Drum) :1
-(Laughing) :5
-(Fussing) :1
-(Sigh) :5
-(Typewriter) :1
-(Beat) :8
-(Music) :610
-(Lyrics) :2
-(Gasping) :1
-(Sneezes) :1
-(Xylophone) :3
-(Live) :1
-(Shouting) :3
-(Clanging) :1
-(Flaps) :1
-(Bagpipes) :3
-(Cymbals) :1
-(Thunder) :2
-(Knocks) :1
-(Laughter) :9990
-(Blip) :1
-(Arabic) :9
+(Music ends) :44
+(Applause ends) :42
+(Cheers) :40
 (Beatboxing) :24
-(Tuning) :5
-(Trumpet) :5
-(Wheezing) :1
-(Chomping) :2
+(Cheering) :17
+(English) :17
+(Whistling) :17
+(k) :16
+(Sighs) :15
+(Guitar strum) :14
+(Guitar) :14
+(Sings) :13
+(Audience) :12
+(Beep) :12
+(Clicks metronome) :12
+(Clapping) :10
+(Drum sounds) :10
+(In Chinese) :10
+(Marimba sounds) :10
+(Arabic) :9
+(Beeps) :9
+(Drums) :9
+(Beat) :8
+(Clicking) :8
+(Laughter ends) :8
+(Ball squeaks) :7
+(Claps) :7
+(Drum roll) :7
+(Explosion) :7
+(Honk) :7
+(Spanish) :7
+(Applause and cheers) :6
+(Drum sound) :6
+(Gasps) :6
+(Recording) :6
+(Ringing) :6
+(Tones) :6
+(Applause continues) :5
 (Beatbox) :5
-(Gunfire) :1
+(Frequency sounds) :5
+(Laughing) :5
+(Marimba sounds end) :5
+(Noise) :5
+(Piano notes) :5
+(Piano) :5
+(Rattling) :5
+(Screaming) :5
+(Shouts) :5
+(Sigh) :5
+(Sound changes momentarily) :5
+(Trumpet) :5
+(Tuning) :5
+(Beatboxing ends) :4
+(Chirping sound) :4
 (Clunk) :4
-(singing) :1
+(Distorted voice) :4
+(Dolphin noises) :4
+(Imitating Arabic) :4
+(In Dutch) :4
+(Japanese) :4
+(Laugher) :4
+(Mumbling) :4
+(Silence) :4
+(Singing ends) :4
+(Speaks) :4
+(Violin plays) :4
+(Whistle) :4
+(2011) :3
+(Audience claps along) :3
+(Baby crying) :3
+(Bagpipes) :3
+(Both sing) :3
+(Clears throat) :3
+(Crackling) :3
+(Ding) :3
+(Dog barking) :3
+(Dog panting noise) :3
+(Drum sounds end) :3
+(Drumming and chanting) :3
+(French) :3
+(Gasp) :3
+(Giggle) :3
+(Music with lyrics) :3
+(Nature sounds) :3
+(Piano music) :3
+(Rain falls) :3
+(Screams) :3
+(Shouting) :3
+(Snapping) :3
+(Static) :3
+(Trumpet sounds) :3
+(Typing noises) :3
+(Water splashes) :3
+(Whistling ends) :3
+(Xylophone) :3
+(offscreen) :3
+(video) :3
+(1925) :2
+(2009) :2
+(3) :2
+(As Brown) :2
+(Audience cheers) :2
+(Audience counting) :2
+(Audience laughter) :2
+(Audience murmurs) :2
+(Barking) :2
+(Beeping) :2
+(Bells) :2
+(Breathes in) :2
+(Breathing in) :2
+(Buzzing) :2
+(Camera shutter) :2
+(Chatter) :2
+(Cheers and applause) :2
+(Children talking) :2
+(Chomping) :2
+(Coughs) :2
+(Counts out the beats) :2
+(Creatures grunting) :2
+(Crying) :2
+(Digital beeping sounds) :2
+(Digital hum and whistling sound) :2
+(Dinosaur roaring) :2
+(Dog barking and spring boinging) :2
+(Doorbell) :2
+(Double beat) :2
+(Engine roaring) :2
+(Exhales) :2
+(Explosion sound) :2
+(Fiddle and synthesizer) :2
+(Frogs croaking) :2
+(Gibberish) :2
+(Growling) :2
+(Grunts) :2
+(Guitar music starts) :2
+(Guitar music) :2
+(Gunshot) :2
+(Honking) :2
+(Inhales) :2
+(JAWS speaking) :2
+(Laugther) :2
+(Launch noises) :2
+(Lyrics) :2
+(Machine gun fire) :2
+(Mock sob) :2
+(Multiple voices) :2
+(Murmuring) :2
+(Music by Anna Oxygen) :2
+(No sound) :2
+(Nonsense) :2
+(Punch) :2
+(Recording of crowd roaring) :2
+(Roar) :2
+(Rumbling) :2
+(Sobs) :2
+(Soft marimba sounds end) :2
+(Soft marimba sounds) :2
+(Thumping) :2
+(Thunder) :2
+(Translator) :2
+(Typing noise) :2
+(Water splashes at lower octave) :2
+(Whip cracks) :2
+(Whoosh) :2
+(c) :2
+(musical notes) :2
+(yelling more loudly) :2
+(1902) :1
+(1927) :1
+(1939) :1
+(1968) :1
+(1972) :1
+(1982) :1
+(1993) :1
+(2000) :1
+(2001) :1
+(2003) :1
+(2008) :1
+(2010) :1
+(A Saran Warp ball being released) :1
+(A capella singing) :1
+(A cappella singing in a South African language) :1
+(A) :1
+(Adventure music) :1
+(Airplane) :1
+(Alarm clock) :1
+(Alarm clocks ring) :1
+(Ambulance siren) :1
+(Amendment) :1
+(American accent) :1
+(Animal sounds) :1
+(Applause and cheering) :1
+(Aquatic noises) :1
+(As Tony Blair) :1
+(Audience and Dan Dennett) :1
+(Audience gasps) :1
+(Audience guesses) :1
+(Audience member cheers) :1
+(Audience member coughs) :1
+(Audience reaction) :1
+(Audience reacts) :1
+(Audience responds) :1
+(Audience roars) :1
+(Audience shouting names) :1
+(Audience shouting) :1
+(Audience whistles) :1
+(BUT I DID NOT SHOOT THE DEPUTY) :1
+(Baby cooing) :1
+(Baby cries) :1
+(Bacon sizzles) :1
+(Ball rolls) :1
+(Balloon pops) :1
+(Barks) :1
+(Bass guitar and accordion) :1
+(Bass guitar) :1
+(Bass solo) :1
+(Beaver crying) :1
+(Bells end) :1
+(Bells ring) :1
+(Bird call) :1
+(Bird singing at slow then full speed) :1
+(Bird singing) :1
+(Birds chirp) :1
+(Birds chirping) :1
+(Birds singing) :1
+(Blip) :1
+(Blowing noise) :1
+(Board shaking) :1
+(Bones break) :1
+(Boomerang noises) :1
+(Both vocalizing) :1
+(Bottles clink) :1
+(Brass and wind instruments play) :1
+(Braying) :1
+(Breaking frozen lettuce or celery) :1
+(Breaking glass) :1
+(Breathes out) :1
+(Breathing loudly) :1
+(Breathing out) :1
+(Breathing) :1
+(British English) :1
+(British accent) :1
+(Bubbling sounds) :1
+(Bugle sound) :1
+(Burst) :1
+(Buzzer) :1
+(Buzzing sound) :1
+(CA and RL speaking at once) :1
+(Cabbage stabbed with a knife) :1
+(Camera click) :1
+(Camera shutter sounds) :1
+(Canku One Star dances) :1
+(Car engine) :1
+(Cat meowing) :1
+(Cello music) :1
+(Chainsaw sound) :1
+(Chanting) :1
+(Chatting) :1
+(Cheer) :1
+(Chieko and Nick laugh) :1
+(Child shouting) :1
+(Children react) :1
+(Children singing) :1
+(Children speaking) :1
+(Choir chants) :1
+(Choking) :1
 (Chords) :1
-(Thuds) :1
+(Cigarette burns) :1
+(Clang) :1
+(Clanging) :1
+(Clanking ends) :1
+(Clanking sounds) :1
+(Clapping ends) :1
+(Clapping sounds) :1
+(Clapping to the beat) :1
+(Clattering) :1
+(Clear) :1
+(Clears his throat) :1
+(Click) :1
+(Clicks) :1
+(Cockles and Mussels) :1
+(Coffee grinder) :1
+(Continuous sound) :1
+(Cracking sound) :1
+(Crickets chirping) :1
+(Cries) :1
+(Crowd Noise) :1
+(Crowd cheering) :1
+(Crowd groans) :1
+(Crowd noises) :1
+(Cymbal) :1
+(Cymbals) :1
+(Didgeridoo) :1
+(Dissonance) :1
+(Distorted guitar music starts) :1
+(Dolphin echolocation noises) :1
+(Dolphin whistling noises) :1
+(Dolphins noises) :1
+(Dominoes fall) :1
+(Drilling noise) :1
+(Drum beat) :1
+(Drum) :1
+(Drumbeats and clanking sounds) :1
+(Drumbeats and cowbell) :1
+(Drumbeats and cymbals) :1
 (Drumbeats) :1
+(Dryer) :1
+(Electronic representation of orchestral music) :1
+(Explosions) :1
+(Feedback) :1
+(Final chord) :1
+(First Year of Category) :1
+(First voice) :1
+(Flaps) :1
+(Foot stomp) :1
+(Frequency) :1
+(Fundamentals of Laparoscopic Surgery) :1
+(Fuse blowing) :1
+(Fussing) :1
+(Futuristic music) :1
+(Fuzz) :1
+(Game piece smacks board) :1
+(Game) :1
+(Gasping) :1
+(Geert Chatrou and audience whistling) :1
+(Girl singing) :1
+(Glass breaks) :1
+(Going up in pitch) :1
+(Groan) :1
+(Grunting) :1
+(Guitar music ends) :1
+(Gun shots) :1
+(Gunfire) :1
+(Gunshot reverbs church) :1
+(Gunshot reverbs in bathroom) :1
+(Gunshot reverbs in canyon) :1
+(Gunshot sound) :1
+(Gunshots) :1
+(Guzheng) :1
+(Hammer) :1
+(Heroic music) :1
+(Hesitant applause) :1
+(Higher frequency) :1
+(Higher pitch) :1
+(Hindi) :1
+(Holds note) :1
+(Honking sound) :1
+(Hospital noises) :1
+(Huge crowd applauding) :1
+(Hums Final Jeopardy music) :1
+(Imitates a siren passing by) :1
+(In Arabic) :1
+(In Russian) :1
+(In a lowered voice) :1
+(In squeaky voice) :1
+(Inaudible echoing voice) :1
+(Inaudible) :1
+(Intel ad jingle) :1
+(Jackhammer) :1
+(Jet engine accelerates) :1
+(Khmer) :1
+(Kiss) :1
+(Kissing) :1
+(Knives being sharpened) :1
+(Knocks) :1
+(Laugh sound) :1
+(Laughted) :1
+(Laughter and Applause) :1
+(Laughter and applause) :1
+(Laughter and cheers) :1
+(Laughter continues) :1
+(Light Clapping) :1
+(Light clapping sounds) :1
+(Light clapping) :1
+(Limited Frequency Music) :1
+(Live) :1
+(Loud beeping noise) :1
+(Loud cheering) :1
+(Loud clapping sounds) :1
+(Loud music) :1
+(Loud) :1
+(Louder whirring noise) :1
+(Mac Stone in film) :1
+(Mac Stone narrating) :1
+(Machine buzzes) :1
+(Machine noises) :1
+(Makes the sound of a kiss) :1
+(Mandarin) :1
+(Marine mammal sounds) :1
+(Mechanical Sounds) :1
+(Mechanical noises) :1
+(Mechanical sounds) :1
+(Microwave beeps) :1
+(Mixed reply) :1
+(Mosquito buzzing) :1
+(Mosquitoes buzz) :1
+(Motor sound) :1
+(Motorcyle revving) :1
+(Mumbles) :1
+(Music and singing) :1
+(Music by Caroline Lufkin) :1
+(Music continues) :1
+(Music ending) :1
+(Music ends abruptly) :1
+(Music fades out) :1
+(Music fades slowly) :1
+(Music noises) :1
+(Music tempo quickens) :1
+(Music with unintelligible lyrics) :1
+(Musical chords) :1
+(Musical notes) :1
+(Newborn crying) :1
+(Nicole laughs) :1
+(Noise of shooting arrow) :1
+(Noises) :1
+(Noisy conversation) :1
+(Nokia ringtone) :1
+(Non English) :1
+(Normal voice) :1
+(Not a Real Doctor) :1
+(Ocean waves) :1
+(Office noise) :1
+(Organ sound) :1
+(Paint guns fire) :1
+(Paper rustling) :1
+(Percussion) :1
+(Phone Ringing) :1
+(Phone ring) :1
+(Piano music ends) :1
+(Piano plays) :1
+(Pink noise) :1
+(Pitch getting higher and lower) :1
+(Plays notes) :1
+(Plays the five notes) :1
+(Poem ends) :1
+(Police siren and shouting over megaphone) :1
+(Portamento) :1
+(Propeller churns) :1
+(Rain and wind sounds) :1
+(Rainforest noises) :1
+(Rapping) :1
+(Reading) :1
+(Recites poem in Hindi) :1
+(Record scratches) :1
+(Recording of crowd cheering) :1
+(Robot buzzing) :1
+(Robot noises) :1
+(Robotic voice) :1
+(Rocket launch) :1
+(Rustling) :1
+(SJ gasps) :1
+(Saw cuts) :1
+(Scratching) :1
+(Scream) :1
+(Screeching) :1
+(Second voice) :1
+(Shooting noises) :1
+(Shreiks) :1
+(Singing in Arabic) :1
+(Singing in various languages) :1
+(Sings in Spanish) :1
+(Siren noise) :1
+(Siren) :1
+(Sirens) :1
+(Sitar) :1
+(Skateboard sounds) :1
+(Slaps woman) :1
+(Slot machine) :1
+(Slurps) :1
+(Snaps) :1
+(Sneezes) :1
+(Sneezing sound) :1
+(Sniffs) :1
+(Snores) :1
+(Snoring) :1
+(Soft clapping sounds) :1
+(Soft crackling) :1
+(Sound of air escaping from valve) :1
+(Sound of falling tree) :1
+(Sound of metal lid clanking against a counter) :1
+(Sound of running air) :1
+(Sound) :1
+(Space shuttle preparing for takeoff) :1
+(Space shuttle taking off) :1
+(Speaking in Arabic) :1
+(Speaking in Japanese) :1
+(Speaks more loudly) :1
+(Squeaking) :1
+(Static sounds) :1
+(Stomping) :1
+(Surprised laughter) :1
+(Swahili) :1
+(Swat) :1
+(Synchronized clicking) :1
+(Tapping sounds) :1
+(Tapping) :1
+(Techno music) :1
+(Teetering tones) :1
+(Telephone ringing) :1
+(Thuds) :1
+(To audience) :1
+(Together) :1
+(Toilet flushing) :1
+(Tone rising out of key) :1
+(Tone) :1
+(Toy car) :1
+(Toy squeaks) :1
+(Traffic noise) :1
+(Train engine) :1
+(Typewriter bell) :1
+(Typewriter) :1
+(Typewriting) :1
+(Typing) :1
+(Underwater plunge) :1
+(Unintelligible lyrics continue) :1
+(Unintelligible) :1
+(Video game noises) :1
+(Violin music) :1
+(Violin) :1
+(Vocalization) :1
+(Voice Over) :1
+(Voice effects) :1
+(Voices) :1
+(Water sound) :1
+(Wheezing) :1
+(Whinny) :1
+(Whirring noise) :1
+(Whirring sound) :1
+(Whirring) :1
+(Whispering) :1
+(Whistles) :1
+(Wings flap) :1
+(Woman screaming) :1
+(Woman screams) :1
+(age 6) :1
+(aka Echo Chan) :1
+(along with a lot of other stuff) :1
+(and made bee pie) :1
+(b) :1
+(cheering) :1
+(clicks metronome) :1
+(female dog) :1
+(flight attendant announcements) :1
+(in Sanskrit) :1
+(laughter) :1
+(loud crowd noise) :1
+(mock drum roll) :1
+(on video) :1
+(singing) :1
+(the ROWE) :1
+(thin air) :1
+(this is the EG crowd) :1
+(whirring noise) :1
+(with 4 attempts) :1
+(your fathers bristles white and stiff now) :1

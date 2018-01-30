@@ -84,26 +84,35 @@ def build_ted_vocab():
     '''
     ted_vocab=set()
     ted_meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
+    # Create a folder to move the meta files that couldnot be processed
+    ted_meta_unprocessed_path = os.path.join(ted_data_path,'TED_meta_unprocessed/')
+    if not os.path.exists(ted_meta_unprocessed_path):
+        os.makedirs(ted_meta_unprocessed_path)
+    # Process the meta files
     for atalk in glob.glob(ted_meta_path):
         path,filename = os.path.split(atalk)
         print filename
-        # Travarse through all dependency trees for all words
-        for adep,_,_,_ in generate_dep_tag(int(filename[:-4])):
-            allwords = __traverse__(adep)
-            for aword in allwords:
-                # Add the word
-                ted_vocab.add(aword)
-                # If the word contains hyphen or period, split them and add
-                # them as well. Also add a hypen and periodless version because
-                # these things often cause confusions. This will be required
-                # when the engine would try to resolve unfound words.
-                if '-' in aword:
-                    ted_vocab.update(aword.split('-'))
-                    ted_vocab.add(aword.replace('-',''))
-                if '.' in aword:
-                    ted_vocab.update(aword.split('.'))
-                    ted_vocab.add(aword.replace('.',''))
-                
+        try:
+            # Travarse through all dependency trees for all words
+            for adep,_,_,_ in generate_dep_tag(int(filename[:-4])):
+                allwords = __traverse__(adep)
+                for aword in allwords:
+                    # Add the word
+                    ted_vocab.add(aword)
+                    # If the word contains hyphen or period, split them and add
+                    # them as well. Also add a hypen and periodless version because
+                    # these things often cause confusions. This will be required
+                    # when the engine would try to resolve unfound words.
+                    if '-' in aword:
+                        ted_vocab.update(aword.split('-'))
+                        ted_vocab.add(aword.replace('-',''))
+                    if '.' in aword:
+                        ted_vocab.update(aword.split('.'))
+                        ted_vocab.add(aword.replace('.',''))
+        except Exception as e:
+            print e
+            print 'Moving the meta file {} to {}'.format(atalk,ted_meta_unprocessed_path)
+            os.rename(atalk,os.path.join(ted_meta_unprocessed_path,filename))
     print 'Total size of vocabulary:',len(ted_vocab)
     return ted_vocab
 
@@ -111,7 +120,6 @@ def crop_glove_dictionary():
     '''
     This function creates a reduced version of the glove word2vec dictionary 
     by deleting all the words that did not appear in the ted talk vocabulary.
-    TODO: Incomplete
     '''
     print 'building ted vocab'
     ted_vocab = build_ted_vocab()
@@ -157,3 +165,11 @@ def __traverse__(atree):
         elif type(anode)==list:
             words.update(__traverse__(anode))
     return words
+
+if __name__=='__main__':
+    print 'preparing data'
+    print 'please make sure that the TED_data_location.py file is updated'+\
+        'with the correct data location'
+    print 'Preparing the glove dictionary'
+    crop_glove_dictionary()
+
