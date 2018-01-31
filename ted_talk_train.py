@@ -25,8 +25,8 @@ def train_humor_sentencewise(output_folder = 'SSE_result/',
     activation = F.log_softmax,
     model_outfile = 'model_weights.pickle',
     output_log = 'logfile.txt',
-    useGPU = False,
-    gpunum = -1):
+    gpunum = -1,
+    max_iter=np.inf):
     '''
     Procedure to train the SSE with sentences followed by laughter or 
     non-laughter tags.
@@ -63,7 +63,9 @@ def train_humor_sentencewise(output_folder = 'SSE_result/',
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
         iter = 0
         # Write the loss in file
-        for atalk in train_id:
+        for i,atalk in enumerate(train_id):
+            if i > max_iter:
+                break
             print 'training',atalk
             # Feed the whole talk as a minibatch
             minibatch = [(adep,label) for adep,label,_,_ in \
@@ -93,16 +95,26 @@ def __compute_nllloss__(log_probs,labels,gpunum):
     # Compute loss from the model output and data labels
     loss=None
     for i in range(len(labels)):
-        if loss is None:
-            loss = loss_fn(log_probs[i],\
-                autograd.Variable(torch.LongTensor([labels[i]])))
+        # Define the label as torch tensor variable
+        if gpunum < 0:
+            label = autograd.Variable(torch.LongTensor([labels[i]]))
         else:
-            temploss = loss_fn(log_probs[i],\
-                autograd.Variable(torch.LongTensor([labels[i]])))
+            with torch.cuda.device(gpunum):
+                label = autograd.Variable(torch.cuda.LongTensor([labels[i]]))
+        # Compute and append loss for minibatch
+        if loss is None:
+            loss = loss_fn(log_probs[i],label)
+        else:
+            temploss = loss_fn(log_probs[i],label)
             loss = torch.cat((loss,temploss),dim=0)
     return loss.mean()
 
 
 if __name__=='__main__':
-    train_humor_sentencewise()
+    import time
+    start_time = time.time()
+    np.random.seed(0)
+    train_humor_sentencewise(gpunum=-1,max_iter=10)
+    print time.time() - start_time
+
 

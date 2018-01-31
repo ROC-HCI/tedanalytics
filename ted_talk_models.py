@@ -2,11 +2,11 @@ import torch
 import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.parameter import Parameter
 import torch.optim as optim
 import ted_talk_data_feeder as ttdf
 
 import numpy as np
-from torch.nn.parameter import Parameter
 from TED_data_location import ted_data_path, wordvec_path
 
 class multiLinear(nn.Module):
@@ -30,7 +30,7 @@ def def_tensor(gpunum,listobj):
         return autograd.Variable(torch.Tensor([listobj]))
     else:
         with torch.cuda.device(gpunum):
-            return autograd.Variable(torch.cuda.Tensor([listobj]))        
+            return autograd.Variable(torch.cuda.FloatTensor([listobj]))        
 
 class SyntacticSemanticEngine(nn.Module):
     '''
@@ -165,7 +165,7 @@ def __test_encodetree__():
     y = model(x)
     print 'model output',y
 
-def __test_with_multiLinear__():
+def __test_with_multiLinear__(gpunum=-1):
     '''
     For testing purpose only. This is a simple test to check if the
     multiLinear module works or not.
@@ -180,13 +180,22 @@ def __test_with_multiLinear__():
     b1 = autograd.Variable(torch.Tensor([[1,1]]))
     w2 = autograd.Variable(torch.Tensor([[0,-1,0],[1,0,0]])).t()
     b2 = autograd.Variable(torch.Tensor([[2,-2]]))
+    if gpunum >= 0:
+        model = model.cuda(gpunum)
+        w1,b1,w2,b2 = w1.cuda(gpunum),b1.cuda(gpunum),w2.cuda(gpunum),b2.cuda(gpunum)
+
     # training steps
     for i in range(25000):
-        x1 = autograd.Variable(torch.rand(1,3))
+        if gpunum >= 0:
+            x1 = autograd.Variable(torch.rand(1,3)).cuda(gpunum)
+            x2 = autograd.Variable(torch.rand(1,3)).cuda(gpunum)
+        else:
+            x1 = autograd.Variable(torch.rand(1,3))
+            x2 = autograd.Variable(torch.rand(1,3))
+        
         y1 = torch.mm(x1,w1)+b1
         print 'input 1',x1
         print 'output 1',y1
-        x2 = autograd.Variable(torch.rand(1,3))
         y2 = torch.matmul(x2,w2)+b2
         print 'input 2',x2
         print 'output 2',y2
@@ -200,3 +209,14 @@ def __test_with_multiLinear__():
         # print loss
         print 'loss =',loss
     print model.state_dict()                    
+
+if __name__=='__main__':
+    import time
+    start_time = time.time()
+    np.random.seed(0)
+    __test_with_multiLinear__(gpunum=-1)
+    print 'Elapsed Time:',time.time() - start_time
+    start_time = time.time()
+    np.random.seed(0)
+    __test_with_multiLinear__(gpunum=0)
+    print 'Elapsed Time:',time.time() - start_time
