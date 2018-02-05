@@ -1,0 +1,14 @@
+#!/bin/sh
+#SBATCH -p standard
+#SBATCH --mem=4gb
+#SBATCH -c 1
+#SBATCH -a 0-30
+#SBATCH -t 3-01:00:00  
+#SBATCH -J tanv_trainer
+#SBATCH -o /scratch/mtanveer/output/trainer_output%j
+#SBATCH -e /scratch/mtanveer/output/trainer_error%j
+
+module load anaconda/4.4.0
+echo $SLURM_ARRAY_TASK_ID
+python -c "import os;import ted_talk_train as t;t.train_humor_sentencewise(output_folder='run_{}/'.format(os.environ['SLURM_ARRAY_TASK_ID']))"
+

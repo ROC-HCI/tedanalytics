@@ -18,9 +18,9 @@ def split_train_test(train_ratio=0.7):
 
 def generate_dep_tag(talk_id,dep_type='recur',tag_type='{LG}'):
     '''
-    Given a talk_id, it generates the dependency tree and the tag information.
-    The dep_type can take two values: 'recur' means dependency tree in
-    recursive format, 'conll' means conll format.
+    Given a talk_id, it generates the dependency tree and the tag 
+    information. The dep_type can take two values: 'recur' means 
+    dependency tree in recursive format, 'conll' means conll format.
     The tag_type takes two values: '{LG}' means laughter followed by the
     sentence. {NS} means applause
     '''
@@ -50,8 +50,9 @@ def get_dep_rating(talk_id,dep_type='recur'):
     data = cp.load(open(filename))
     alldat = []
     ratedict = data['talk_meta']['ratings']
-    ratedict_processed = {akey:float(ratedict[akey])/float(ratedict['total_count'])\
-            for akey in sorted(ratedict) if not akey=='total_count'}
+    ratedict_processed = {akey:float(ratedict[akey])/float(\
+        ratedict['total_count']) for akey in sorted(ratedict)\
+        if not akey=='total_count'}
 
     for (i,j),adep,bdep in zip(data['dep_2_fave'],\
             data['dep_trees_recur'],\
@@ -85,7 +86,8 @@ def build_ted_vocab():
     ted_vocab=set()
     ted_meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
     # Create a folder to move the meta files that couldnot be processed
-    ted_meta_unprocessed_path = os.path.join(ted_data_path,'TED_meta_unprocessed/')
+    ted_meta_unprocessed_path = os.path.join(ted_data_path,\
+        'TED_meta_unprocessed/')
     if not os.path.exists(ted_meta_unprocessed_path):
         os.makedirs(ted_meta_unprocessed_path)
     # Process the meta files
@@ -99,10 +101,11 @@ def build_ted_vocab():
                 for aword in allwords:
                     # Add the word
                     ted_vocab.add(aword)
-                    # If the word contains hyphen or period, split them and add
-                    # them as well. Also add a hypen and periodless version because
-                    # these things often cause confusions. This will be required
-                    # when the engine would try to resolve unfound words.
+                    # If the word contains hyphen or period, split them and
+                    # add them as well. Also add a hypen and periodless 
+                    # version because these things often cause confusions. 
+                    # This will be required when the engine would try to 
+                    # resolve unfound words.
                     if '-' in aword:
                         ted_vocab.update(aword.split('-'))
                         ted_vocab.add(aword.replace('-',''))
@@ -111,7 +114,8 @@ def build_ted_vocab():
                         ted_vocab.add(aword.replace('.',''))
         except Exception as e:
             print e
-            print 'Moving the meta file {} to {}'.format(atalk,ted_meta_unprocessed_path)
+            print 'Moving the meta file {} to {}'.format(atalk,\
+                ted_meta_unprocessed_path)
             os.rename(atalk,os.path.join(ted_meta_unprocessed_path,filename))
     print 'Total size of vocabulary:',len(ted_vocab)
     return ted_vocab
