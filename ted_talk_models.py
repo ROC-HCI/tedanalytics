@@ -135,17 +135,31 @@ class SyntacticSemanticEngine(nn.Module):
                     count+=1.
         return torch.div(hout_sum,count)
 
-    def forward(self,minibatch):
+    def forward(self,bag_of_dtree,reduce=False):
         '''
-        Produce the model output of a minibatch
+        Produce the model output of a bag_of_dtree
         '''
-        minibatch_result = []
-        for atree in minibatch:
-            if atree is None:
-                raise IOError('Can not contain empty data')
-            # Calculate the embedding vector for each component
-            minibatch_result.append(self.final_activation(self.encodetree(atree)))
-        return minibatch_result
+        bag_of_dtree_result = []
+        if not reduce:
+            for atree in bag_of_dtree:
+                if atree is None:
+                    raise IOError('Can not contain empty data')
+                # Calculate the embedding vector for each component
+                bag_of_dtree_result.append(self.final_activation(\
+                    self.encodetree(atree)))
+            bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
+        else:
+            for atree in bag_of_dtree:
+                if atree is None:
+                    raise IOError('Can not contain empty data')
+                # Calculate the embedding vector for each component
+                bag_of_dtree_result.append(self.encodetree(atree))
+            bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
+            # The final result is calculated as an average of the
+            # bag of dependency trees
+            bag_of_dtree_result = self.final_activation(\
+                bag_of_dtree_result.mean(dim=0))
+        return bag_of_dtree_result
         
 
 def __test_encodetree__():

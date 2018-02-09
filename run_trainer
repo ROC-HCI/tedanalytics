@@ -10,5 +10,5 @@
 
 module load anaconda/4.4.0
 echo $SLURM_ARRAY_TASK_ID
-python -c "import os;import ted_talk_train as t;t.train_humor_sentencewise(output_folder='run_{}/'.format(os.environ['SLURM_ARRAY_TASK_ID']))"
+python -c "import os;import ted_talk_train as t;t.train_ratings(output_folder='run_{}/'.format(os.environ['SLURM_ARRAY_TASK_ID']))"
 
