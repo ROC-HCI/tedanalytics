@@ -1,7 +1,20 @@
 import csv
 
+
+# Name of all ratings
+rating_labels = sorted(['beautiful','funny','ingenious','ok','fascinating','total_count','persuasive','inspiring','longwinded','informative','jaw-dropping','obnoxious','confusing','courageous','unconvincing'])
+
+# Process and make the talk id's and talk ratings ready
 reader = csv.DictReader(open('./index.csv','rU'))
-all_valid_talks = [int(arow['Video_ID']) for arow in reader if arow['Is_a_Talk?']=='Yes']
+all_valid_talks = []
+all_ratings = {}
+for arow in reader:
+    if arow['Is_a_Talk?']=='Yes':
+        atalk = int(arow['Video_ID'])
+        all_valid_talks.append(atalk)
+        all_ratings[atalk] = {ratings:arow[ratings] for ratings in rating_labels}
+
+
 
 allrating_samples = \
 [

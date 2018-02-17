@@ -37,15 +37,22 @@ class SyntacticSemanticEngine(nn.Module):
     Syntactic Semantic Engine is a new model for representing a dependency
     tree along with the distributed representations of the corresponding words.
     '''
-    def __init__(self,dep_dict,pos_dict,glove_voc,GPUnum=0,sensedim=2,\
-        activation=F.relu,final_activation=F.log_softmax):
+    def __init__(self,dep_dict,pos_dict,glove_voc,reduced=True,GPUnum=-1,
+        sensedim=8,activation=F.relu,final_activation=F.log_softmax):
         '''
         To initiate, provide dictionaries that map to indices from dependency
         relations (dep_dict) and parts of speech (pos_dict).
         If GPUnum>=0, Cuda version of the tensors would be used. If you don't
-        want to use GPU, set GPUdeviceNum=-1
+        want to use GPU, set GPUnum=-1
+        If the output is not reduced, the final activation is applied over
+        all the dependency trees in the input and then it is
+        result is stacked together and returned.
+        If reduced, the output of each individual dependency tree
+        is averaged and then the final activation function is
+        applied
         '''
         super(SyntacticSemanticEngine,self).__init__()
+        self.reduce = reduced
         # Size of the learnable parameters
         # Sense vector size
         self.s = sensedim
@@ -114,7 +121,9 @@ class SyntacticSemanticEngine(nn.Module):
         count = 0.
         if not atree:
             raise IOError('Tree cannot be empty')
+        # Loop over all children
         for i,anode in enumerate(atree):
+            # If leaf node
             if type(anode) == unicode or type(anode)==str:
                 # lookahead if the next node is a subtree
                 if i < len(atree)-1 and type(atree[i+1])==list:
@@ -133,14 +142,18 @@ class SyntacticSemanticEngine(nn.Module):
                 else:
                     hout_sum+=hout
                     count+=1.
+        # Return the average of the children
         return torch.div(hout_sum,count)
 
-    def forward(self,bag_of_dtree,reduce=False):
+    def forward(self,bag_of_dtree):
         '''
         Produce the model output of a bag_of_dtree
         '''
         bag_of_dtree_result = []
-        if not reduce:
+        if not self.reduce:
+            # If not reduced, the final activation is applied over
+            # all the dependency trees in the input and then the
+            # results are stacked together and returned
             for atree in bag_of_dtree:
                 if atree is None:
                     raise IOError('Can not contain empty data')
@@ -149,6 +162,9 @@ class SyntacticSemanticEngine(nn.Module):
                     self.encodetree(atree)))
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
         else:
+            # If reduced, the output of each individual dependency tree
+            # is averaged and then the final activation function is
+            # applied
             for atree in bag_of_dtree:
                 if atree is None:
                     raise IOError('Can not contain empty data')

@@ -3,17 +3,18 @@ import json
 import glob
 import cPickle as cp
 import numpy as np
-from list_of_talks import all_valid_talks
+import ted_talk_makeindex
+import list_of_talks as lst_talks
 from TED_data_location import ted_data_path, wordvec_path
 
 def split_train_test(train_ratio=0.7):
     '''
     Split the list of valid talk id's in training and test sets.
     '''
-    m = len(all_valid_talks)
-    train = np.random.choice(all_valid_talks,int(train_ratio*m),\
+    m = len(lst_talks.all_valid_talks)
+    train = np.random.choice(lst_talks.all_valid_talks,int(train_ratio*m),\
         replace=False).tolist()
-    test = list(set(all_valid_talks) - set(train))
+    test = list(set(lst_talks.all_valid_talks) - set(train))
     return train,test
 
 def generate_dep_tag(talk_id,dep_type='recur',tag_type='{LG}'):
@@ -49,10 +50,41 @@ def get_dep_rating(talk_id):
     ratedict_processed = {akey:float(ratedict[akey])/float(\
         ratedict['total_count']) for akey in sorted(ratedict)\
         if not akey=='total_count'}
-    # add all the dependency trees
+    # Another convenient format
+    y = [vals for keys,vals in sorted(ratedict_processed.items())]
+    # All the dependency trees
     for adep in data['dep_trees_recur']:
         alldat.append(adep)
-    return alldat,ratedict_processed
+    return alldat,y,ratedict_processed
+
+
+def binarized_ratings():
+    '''
+    Divides the ground truth ratings into two classes for classification.
+    Returns the binarized labels, the median values, and the label of each
+    column of y.
+    '''
+    y_gt = []
+    # Read ratings from all the talks
+    labels = None
+    for atalk in lst_talks.all_valid_talks:
+        y=[]
+        for akey in lst_talks.rating_labels:
+            if not akey=='total_count':
+                y.append(float(lst_talks.all_ratings[atalk][akey])/float(\
+                    lst_talks.all_ratings[atalk]['total_count']))
+        y_gt.append(y)
+    # Convert into a numpy array
+    y_gt = np.array(y_gt)
+    # Calculate the median
+    thresh = np.median(y_gt,axis=0)
+    # Binarize
+    for i in range(np.size(y_gt,axis=1)):
+        y_gt[y_gt[:,i]<=thresh[i],i] = -1
+        y_gt[y_gt[:,i]>thresh[i],i] = 1
+    return {key:val.tolist() for key,val in zip(lst_talks.all_valid_talks,y_gt)}, \
+        thresh,[label for label in lst_talks.rating_labels if not label=='total_count']
+
 
 def read_dep_pos_vocab():
     '''
@@ -159,6 +191,10 @@ if __name__=='__main__':
     print 'preparing data'
     print 'please make sure that the TED_data_location.py file is updated'+\
         'with the correct data location'
+    print 'making index'
+    ted_talk_makeindex.main()
+    # Reloading the talk list
+    reload(lst_talks)
     print 'Preparing the glove dictionary'
     crop_glove_dictionary()
 
