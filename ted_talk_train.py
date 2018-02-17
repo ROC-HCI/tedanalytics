@@ -111,10 +111,13 @@ from TED_data_location import ted_data_path
 #     model_filename = os.path.join(outpath,model_outfile)
 #     torch.save(model.cpu(),open(model_filename,'wb'))
 
-def __build_SSE__(reduced_val,sense_dim,gpunum=-1,\
+def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
     final_activation=F.log_softmax):
     '''
     Initiate a Syntactic-Semantic-Engine and initiates with data
+    If reduced, the output of each individual dependency tree
+    is averaged and then the final activation function is
+    applied. 
     '''
     # Reading Vocabs
     print 'Reading Vocabs'
@@ -309,7 +312,7 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     return y_test,y_test_score,y_gt,test_idx[:max_data]
 
 
-def __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename,ROCTitle=None):
+def __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename):
     '''
     Helper function to show classification results. Produces classification
     reports, accuracy and ROC curve.
@@ -332,34 +335,37 @@ def __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename,ROCTitle=N
         auc = met.roc_auc_score(y_gt[:,col],y_test_score[:,col])
         print 'AUC:',auc
         fpr,tpr,_ = sl.metrics.roc_curve(y_gt[:,col],y_test_score[:,col],pos_label=1)
+        # Plot ROC Curve
         plt.figure(0)
         plt.clf()
         plt.plot(fpr,tpr,color='darkorange',label='ROC Curve (AUC={0:0.2f})'.\
             format(auc))
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        if ROCTitle:
-            plt.title(ROCTitle)
         plt.legend()
-        plt.savefig(outfilename+'.eps')
+        plt.savefig(outfilename+'_'+y_labels[col]+'.eps')
         plt.close()
 
 
 def __plot_losses__(alllosses,dest):
     # Plot the losses
-    plt.close()
     plt.figure(1)
+    plt.clf()
     plt.semilogy(alllosses)
     plt.xlabel('Iterations (1 sample per iteration)')
     plt.ylabel('Loss')
     plt.savefig(dest)
+    plt.close()
 
-if __name__=='__main__':
-    # start_time = time.time()
-    # model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
-    # #train_humor_sentencewise(gpunum=-1,max_data=10)
-    # train_model(model, __rating_feeder__,max_data=10)
-    # print 'time:',time.time() - start_time
+def exp0_debug_train_test_SSE_small_data():
+    # Sample code to train and evaluate the model over a small data
+    start_time = time.time()
+    # Build the model
+    model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
+    # Train model
+    train_model(model, __rating_feeder__,\
+        output_folder = 'SSE_result/',max_data=10)
+    print 'Training time:',time.time() - start_time
     # Evaluate the model
     start_time = time.time()
     # Binarize the ratings for the whole dataset
@@ -373,8 +379,27 @@ if __name__=='__main__':
     evaluate_model(test_idx, model, loss_fn, data_feeder = __rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile, max_data=5)
+    print 'Evaluation time:',time.time() - start_time
 
-    print 'time:',time.time() - start_time
+def exp1_train_and_evaluate_SSE_for_ratings_no_GPU_all_data(outdir):
+    # Build the model
+    model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
+    # Train model
+    train_model(model, __rating_feeder__,output_folder = outdir)
+    # Prepare to evaluate
+    y_bin, thresh, label_names = ttdf.binarized_ratings()
+    test_idx, model = read_output_log(result_dir = outdir)
+    loss_fn = nn.KLDivLoss(size_average=False)
+    outfile = os.path.join(os.path.join(ted_data_path,outdir),'/classifier_ROC')
+    # Evaluate the model
+    evaluate_model(test_idx, model, loss_fn, data_feeder = __rating_feeder__,\
+        y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
+        outfilename = outfile)
+
+
+if __name__=='__main__':
+    exp0_debug_train_test_SSE_small_data()
+    
 
 
 

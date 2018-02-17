@@ -10,5 +10,6 @@
 
 module load anaconda/4.4.0
 echo $SLURM_ARRAY_TASK_ID
-python -c "import os;import ted_talk_train as t;t.train_ratings(output_folder='run_{}/'.format(os.environ['SLURM_ARRAY_TASK_ID']))"
+# Running experiment 1
+python -c "import os;import ted_talk_train as t;t.exp1_train_and_evaluate_SSE_for_ratings_no_GPU_all_data(outdir='run_{}/'.format(os.environ['SLURM_ARRAY_TASK_ID']))"
 
