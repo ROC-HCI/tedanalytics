@@ -177,7 +177,7 @@ def train_model(model, feeder,
     np.random.shuffle(test_id)
 
     # Use sum, not average.
-    loss_fn = loss_fn_name(size_average=False)    
+    loss_fn = loss_fn_name(size_average=False)
     # Initialize the optimizer
     optimizer = opt_fn_name(model.parameters(),lr = learning_rate)
 
@@ -208,7 +208,7 @@ def train_model(model, feeder,
                 all_deptree,rating_t = feeder(atalk,model.gpu)
 
                 # Clear gradients from previous iterations
-                model.zero_grad()                
+                model.zero_grad()
                 # Forward pass through the model
                 log_probs = model(all_deptree)
                 # Calculate the loss
@@ -221,7 +221,7 @@ def train_model(model, feeder,
 
                 #TODO: Calculate classifier performance and confusion matrix
                 # for the training data
-                
+
                 # Logging the current status
                 lossval = loss.data[0]
                 status_msg =  'training:'+str(atalk)+', Loss:'+\
@@ -294,7 +294,7 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
         # Preserve proba
         y_test_score.append(y_temp)
         # Binarize and preserve
-        y_test.append([-1. if y<=t else 1. for y,t in zip(y_temp,threshold)])            
+        y_test.append([-1. if y<=t else 1. for y,t in zip(y_temp,threshold)])
         # Calculate the loss and preserve
         loss = loss_fn(log_probs,rating_t)
         lossval = loss.data[0]
@@ -381,16 +381,19 @@ def exp0_debug_train_test_SSE_small_data():
         outfilename = outfile, max_data=5)
     print 'Evaluation time:',time.time() - start_time
 
-def exp1_train_and_evaluate_SSE_for_ratings_no_GPU_all_data(outdir):
+def exp1_train_SSE(outdir):
     # Build the model
     model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
     train_model(model, __rating_feeder__,output_folder = outdir)
+
+
+def exp2_evaluate_SSE(outdir):
     # Prepare to evaluate
     y_bin, thresh, label_names = ttdf.binarized_ratings()
     test_idx, model = read_output_log(result_dir = outdir)
     loss_fn = nn.KLDivLoss(size_average=False)
-    outfile = os.path.join(os.path.join(ted_data_path,outdir),'/classifier_ROC')
+    outfile = os.path.join(os.path.join(ted_data_path,outdir),'classifier_ROC')
     # Evaluate the model
     evaluate_model(test_idx, model, loss_fn, data_feeder = __rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
@@ -398,8 +401,5 @@ def exp1_train_and_evaluate_SSE_for_ratings_no_GPU_all_data(outdir):
 
 
 if __name__=='__main__':
-    exp0_debug_train_test_SSE_small_data()
-    
-
-
+    exp2_evaluate_SSE(outdir='run_0')
 
