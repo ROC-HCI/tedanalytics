@@ -1,8 +1,40 @@
 import csv
+'''
+This module provides access to the ID's and ratings of valid TED talks
+in the dataset. It makes heavy use of the database index (index.csv) sp
+please make sure you run the ted_talk_makeindex.py at least once before
+using this module.
 
+It offers the following global variables:
+@param rating_labels = the labels of the audience ratings in sorted order
+@param all_valid_talks = Integer ID's of all the valid TED talks in database
+                         Please note that some of the TED videos are not "talks"
+                         e.g. dance, music, peotry etc.
+@param all_ratings = A dictionary containing the raw rating counts from the
+                     audience. Please note that the counts are not normalized.
+@param test_set = A set of valid TED talks reserved away as test dataset
+'''
 
 # Name of all ratings
 rating_labels = sorted(['beautiful','funny','ingenious','ok','fascinating','total_count','persuasive','inspiring','longwinded','informative','jaw-dropping','obnoxious','confusing','courageous','unconvincing'])
+
+# This is a hand curated test set of 150 datapoints. It was randomly sampled
+# from the dataset with a constraint that there is at least 2 ratings for each
+# type of rating.
+test_set = set([ 233,  665,  263,  195,  660,   75, 1315, 1090, 1944,  614, 1565,
+        216, 1404, 1633,  516,  483, 1621, 1030,  587, 1326, 2339, 1175,
+       1411, 2681, 1034, 1495,  974, 1875, 1985, 1184, 1370, 1008, 1687,
+       1575,  869,   41, 1559,  965,  248,   87, 1999, 2704, 2588, 1257,
+       2892,  495,   51,   19, 2475, 1643, 1047, 1689, 2417, 1367, 1230,
+       2662, 2006, 1614, 1527, 1161, 2395,  850, 2523, 1459, 1052, 1943,
+       1328, 1266,  453, 1398, 1859, 1238,  499, 1907, 1581, 2017, 1206,
+       1258, 1620, 1836, 2547, 1660,  828,   97, 2608, 2781, 1231, 1195,
+       1756,  362, 2055, 2686,  562, 1639, 1503, 2846, 1098, 1553, 1355,
+       1801, 2634, 1673, 1285, 2688,  970, 2548,  410,  968,  385, 1067,
+        846, 1426, 1555, 1974,  759,  356, 1483, 2570, 2194,  575, 1179,
+       1201, 1636,  750, 1463, 1556, 1438,  900, 1853, 1945, 1659, 2566,
+       2536,  945,   80,  443, 1532,  675,  633, 2361, 1220,  853, 1546,
+       2700,  470, 2391, 1645, 2049, 1517, 1862])
 
 # Process and make the talk id's and talk ratings ready
 reader = csv.DictReader(open('./index.csv','rU'))
@@ -11,10 +43,12 @@ all_ratings = {}
 for arow in reader:
     if arow['Is_a_Talk?']=='Yes':
         atalk = int(arow['Video_ID'])
+        # Skip the talks in the test set. This data is hidden for the final result.
+        if atalk in test_set:
+            continue
         all_valid_talks.append(atalk)
-        all_ratings[atalk] = {ratings:arow[ratings] for ratings in rating_labels}
-
-
+        all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}
+test_set=list(test_set)
 
 allrating_samples = \
 [

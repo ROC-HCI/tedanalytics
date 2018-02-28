@@ -175,8 +175,7 @@ class SyntacticSemanticEngine(nn.Module):
             # bag of dependency trees
             bag_of_dtree_result = self.final_activation(\
                 bag_of_dtree_result.mean(dim=0))
-        return bag_of_dtree_result
-        
+        return bag_of_dtree_result      
 
 def __test_encodetree__():
     '''

@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import glob
 import numpy as np
 import cPickle as cp
 import sklearn as sl
@@ -130,7 +131,7 @@ def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
     print 'Model Initialized'
     return model
 
-def __rating_feeder__(atalk,gpunum=-1):
+def __tree_rating_feeder__(atalk,gpunum=-1):
     '''
     Transforms the data and the ground truth in appropriate format so that
     it can be used as a feeder-function argument for train_model function.
@@ -195,6 +196,7 @@ def train_model(model, feeder,
         fparam.write('Loss_name={}'.format(loss_fn.__repr__())+'\n')
         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
+        losslist = []
         # Iteration
         for iter in range(max_iter):
             # Shuffle the training batch
@@ -219,15 +221,20 @@ def train_model(model, feeder,
                 # Parameter update
                 optimizer.step()
 
-                #TODO: Calculate classifier performance and confusion matrix
-                # for the training data
-
                 # Logging the current status
                 lossval = loss.data[0]
+                # Save the loss in last iteration for computing average
+                if iter == max_iter - 1:
+                    losslist.append(lossval)
+                # Show status
                 status_msg =  'training:'+str(atalk)+', Loss:'+\
                     str(lossval)+', iteration:'+str(iter)
                 print status_msg
                 fparam.write(status_msg + '\n')
+        status_msg = 'Average Loss in last iteration:{}\n'.format(np.mean(losslist))
+        print status_msg
+        fparam.write(status_msg)
+    #Calculate classifier performance for the training data                
     # Save the model
     model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
@@ -262,9 +269,8 @@ def read_output_log(result_dir = 'SSE_result/',logfile = 'logfile.txt'):
             elif aline.startswith('model_outfile'):
                 # Find the model file
                 modelfile = aline.strip().split('=')[1]
-                print aline.strip()
             else:
-                print aline.strip()
+                print aline
         # Save a plot of the loss
         __plot_losses__(alllosses,os.path.join(inpath,'losses.eps'))
         # Load the trained model
@@ -283,6 +289,7 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     y_gt = []
     y_test = []
     y_test_score = []
+    print 'Model evaluation:'
     for i,atalk in enumerate(test_idx):
         if i >= max_data:
             break
@@ -292,7 +299,7 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
         log_probs = model(all_deptree)
         y_temp = np.exp(log_probs.data[0].numpy())
         # Preserve proba
-        y_test_score.append(y_temp)
+        y_test_score.append(y_temp.tolist())
         # Binarize and preserve
         y_test.append([-1. if y<=t else 1. for y,t in zip(y_temp,threshold)])
         # Calculate the loss and preserve
@@ -302,50 +309,86 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
         # Preserve Ground Truth
         y_gt.append(y_gt_dict[atalk])
         # Show status
-        print 'Done. id:',atalk,'remaining:',len(test_idx)-(i+1),\
-            'test loss:',lossval
+        print 'id:',atalk,'remaining:',len(test_idx)-(i+1),'loss:',lossval
     # Show average test loss
-    print 'Average Test Loss:',np.mean(test_losses)
+    average_loss = np.mean(test_losses)
+    print 'Average Loss:',
     # Perform evaluation
-    __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename)
+    results = __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename)
+    # Add the average loss
+    results['average_loss'] = average_loss
+    # Save results in pkl file
+    cp.dump(results,open(outfilename+'.pkl','wb'))
+    return results
 
-    return y_test,y_test_score,y_gt,test_idx[:max_data]
-
-
-def __classifier_eval__(y_gt,y_test,y_test_score,y_labels,outfilename):
+def combine_results(resultfilename,folder_suffix='run_'):
     '''
-    Helper function to show classification results. Produces classification
-    reports, accuracy and ROC curve.
+    Combine the results pickle files from multiple runs by averaging
     '''
-    y_gt = np.array(y_gt)
-    y_test = np.array(y_test)
-    y_test_score = np.array(y_test_score)
+    infolders = glob.glob(os.path.join(ted_data_path,folder_suffix)+'*')
+    combined={}
+    for afolder in infolders:
+        results = cp.load(open(os.path.join(afolder,resultfilename)))
+        for akey in results:
+            if results[akey] and akey!='order':
+                if not akey in combined:
+                    combined[akey] = [results[akey]]
+                else:
+                    combined[akey].append(results[akey])
+    for akey in combined:
+        combined[akey] = np.mean(combined[akey],axis=0).tolist()
+    combined['order']=results['order']
+    return combined
 
-    for col in range(len(y_labels)):
-        print col,y_labels[col],y_gt.shape,y_test.shape
-        # Checking for error
-        gt_unq = np.unique(y_gt[:,col]).shape[0]
-        tst_unq = np.unique(y_test[:,col]).shape[0]
-        if not gt_unq == tst_unq == 2:
-            print 'data sample does not contain both classes ... skipping'
+def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
+    outfilename='',bypass_ROC=True):
+    '''
+    Helper function to return classification results. Returns a dictionary of dictionaries
+    reporting the precision, recall, accuracy, f1 score and AUC for each column of y.
+    '''
+    if type(y_gt)==list:
+        y_gt = np.array(y_gt)
+    if type(y_test)==list:
+        y_test = np.array(y_test)
+    if type(y_test_score)==list:
+        y_test_score = np.array(y_test_score)
+    results = {}
+    # loop through every column of y (different types of ratings)
+    for col in range(len(col_labels)):
+        # Checking if data for both classes is available
+        gt_unq = np.unique(y_gt[:,col])
+        if gt_unq.shape[0] <= 1:
+            print col_labels[col]
+            print 'Data sample contains one or less class ... skipping'
+            results[col_labels[col]]={}
             continue
-        # Printing Report
-        print sl.metrics.classification_report(y_gt[:,col],y_test[:,col])
-        print 'Accuracy:',sl.metrics.accuracy_score(y_gt[:,col],y_test[:,col])
+        # Calculating results
+        prec,rec,fscore, support = met.precision_recall_fscore_support(\
+            y_gt[:,col],y_test[:,col])
         auc = met.roc_auc_score(y_gt[:,col],y_test_score[:,col])
+        accur = met.accuracy_score(y_gt[:,col],y_test[:,col])
+        results[col_labels[col]] = [np.mean(prec),np.mean(rec),\
+            np.mean(fscore),accur,auc]
+        # Show report
+        print col_labels[col]
+        print met.classification_report(y_gt[:,col],y_test[:,col])
+        print 'Accuracy:',accur
         print 'AUC:',auc
-        fpr,tpr,_ = sl.metrics.roc_curve(y_gt[:,col],y_test_score[:,col],pos_label=1)
-        # Plot ROC Curve
-        plt.figure(0)
-        plt.clf()
-        plt.plot(fpr,tpr,color='darkorange',label='ROC Curve (AUC={0:0.2f})'.\
-            format(auc))
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.legend()
-        plt.savefig(outfilename+'_'+y_labels[col]+'.eps')
-        plt.close()
-
+        # Draw the ROC curve if requested        
+        if not bypass_ROC:
+            fpr,tpr,_ = met.roc_curve(y_gt[:,col],y_test_score[:,col])            
+            # Plot ROC Curve
+            plt.figure(0)
+            plt.clf()
+            plt.plot(fpr,tpr,color='darkorange',\
+                label='ROC Curve (AUC={0:0.2f})'.format(auc))
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.legend()
+            plt.savefig(outfilename+'_'+col_labels[col]+'.eps')
+            plt.close()
+    results['order']=['avg_precision','avg_recall','avg_fscore','accuracy','auc']
+    return results
 
 def __plot_losses__(alllosses,dest):
     # Plot the losses
@@ -363,9 +406,10 @@ def exp0_debug_train_test_SSE_small_data():
     # Build the model
     model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
-    train_model(model, __rating_feeder__,\
+    train_model(model, __tree_rating_feeder__,\
         output_folder = 'SSE_result/',max_data=10)
     print 'Training time:',time.time() - start_time
+    ################################################################
     # Evaluate the model
     start_time = time.time()
     # Binarize the ratings for the whole dataset
@@ -375,31 +419,35 @@ def exp0_debug_train_test_SSE_small_data():
     # Prepare loss function
     loss_fn = nn.KLDivLoss(size_average=False)
     # Evaluate the model
-    outfile = os.path.join(ted_data_path,'SSE_result/classifier_ROC')
-    evaluate_model(test_idx, model, loss_fn, data_feeder = __rating_feeder__,\
+    outfile = os.path.join(ted_data_path,'SSE_result/devset_classification_result')
+    evaluate_model(test_idx, model, loss_fn, data_feeder = __tree_rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile, max_data=5)
     print 'Evaluation time:',time.time() - start_time
 
 def exp1_train_SSE(outdir):
+    start_time = time.time()
     # Build the model
     model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
-    train_model(model, __rating_feeder__,output_folder = outdir)
+    train_model(model, __tree_rating_feeder__,output_folder = outdir,max_iter = 10)
+    print 'Training time:',time.time() - start_time
 
 
 def exp2_evaluate_SSE(outdir):
+    start_time = time.time()
     # Prepare to evaluate
     y_bin, thresh, label_names = ttdf.binarized_ratings()
     test_idx, model = read_output_log(result_dir = outdir)
     loss_fn = nn.KLDivLoss(size_average=False)
-    outfile = os.path.join(os.path.join(ted_data_path,outdir),'classifier_ROC')
+    outfile = os.path.join(os.path.join(ted_data_path,outdir),'devset_classification_result')
     # Evaluate the model
-    evaluate_model(test_idx, model, loss_fn, data_feeder = __rating_feeder__,\
+    evaluate_model(test_idx, model, loss_fn, data_feeder = __tree_rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile)
+    print 'Evaluation time:',time.time() - start_time
 
 
 if __name__=='__main__':
-    exp2_evaluate_SSE(outdir='run_0')
+    exp0_debug_train_test_SSE_small_data()
 
