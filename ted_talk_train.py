@@ -21,101 +21,10 @@ import ted_talk_data_feeder as ttdf
 import ted_talk_models as ttm
 from TED_data_location import ted_data_path
 
-# ========= Development Temporarily stalled ======================
-# def train_humor_sentencewise(output_folder = 'SSE_result/',
-#     sense_dim = 2,
-#     train_test_ratio = 0.75,
-#     final_activation = F.log_softmax,
-#     model_outfile = 'model_weights.pickle',
-#     output_log = 'logfile.txt',
-#     gpunum = -1,
-#     max_data=np.inf,
-#     max_iter = 3):
-#     '''
-#     Procedure to train the SSE with sentences followed by laughter or 
-#     non-laughter tags.
-#     '''    
-#     outpath = os.path.join(ted_data_path,output_folder)
-#     if not os.path.exists(outpath):
-#         os.makedirs(outpath)
-
-#     # Prepare trining and test split
-#     train_id,test_id = ttdf.split_train_test(train_test_ratio)
-#     np.random.shuffle(train_id)
-#     np.random.shuffle(test_id)
-
-#     # Reading Vocabs
-#     print 'Reading Vocabs'
-#     _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
-#     wvec = ttdf.read_crop_glove()
-#     # Initialize the model
-#     model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
-#         GPUnum=gpunum,sensedim=sense_dim,final_activation=final_activation)
-#     # Initialize the optimizer
-#     optimizer = optim.Adam(model.parameters(),lr = 0.01)
-#     # Use Negative Log Likelihood Loss
-#     loss_fn = nn.NLLLoss(size_average=False)
-#     # Show status
-#     print 'Model Loaded'
-    
-#     # Save the parameters of the function call. It allows me to 
-      # audit the models
-#     with open(os.path.join(outpath,output_log),'wb') as fparam:
-#         fparam.write('sense_dim={}'.format(sense_dim)+'\n')
-#         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
-#         fparam.write('activation={}'.format(model.activation.__repr__())+'\n')
-#         fparam.write('final_activation={}'.format(\
-#             model.final_activation.__repr__())+'\n')
-#         fparam.write('model_outfile={}'.format(model_outfile)+'\n')
-#         fparam.write('gpunum={}'.format(gpunum)+'\n')
-#         fparam.write('Optimizer_name={}'.format(optimizer.__repr__())+'\n')
-#         fparam.write('Loss_name={}'.format(loss_fn.__repr__())+'\n')
-#         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
-#         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
-        
-#         for iter in range(max_iter):
-#             np.random.shuffle(train_id)
-#             # Write the loss in file
-#             for i,atalk in enumerate(train_id):
-#                 if i > max_data:
-#                     break
-#                 # Feed the whole talk as a minibatch
-#                 minibatch = [(adep,label) for adep,label,_,_ in \
-#                     ttdf.generate_dep_tag(atalk)]
-#                 X,y = zip(*minibatch)
-#                 # Construct the label tensor
-#                 if gpunum < 0:
-#                     labels_t = autograd.Variable(torch.LongTensor(y))
-#                 else:
-#                     with torch.cuda.device(gpunum):
-#                         labels_t = autograd.Variable(torch.cuda.LongTensor(y))
-                
-#                 # Clear gradients from previous iterations
-#                 model.zero_grad()
-#                 # Forward pass through the model
-#                 log_probs = model(X)
-#                 # Calculate the loss
-#                 loss = loss_fn(log_probs,labels_t)
-#                 # Backpropagation of the gradients
-#                 loss.backward()
-#                 # Parameter update
-#                 optimizer.step()
-
-#                 # Show status
-#                 lossval = loss.data[0]
-#                 status_msg =  'training:'+str(atalk)+', Loss:'+str(lossval)+\
-#                     ' #of_trees:'+str(len(y))+' avg_loss_per_tree:'+\
-#                     str(lossval/len(y))
-#                 print status_msg
-#                 fparam.write(status_msg + '\n')
-#     # Save the model
-#     model_filename = os.path.join(outpath,model_outfile)
-#     torch.save(model.cpu(),open(model_filename,'wb'))
-
 def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
     final_activation=F.log_softmax):
     '''
-    Initiate a Syntactic-Semantic-Engine and initiates with data
+    Initiate a Syntactic-Semantic-Engine and initiates with data.
     If reduced, the output of each individual dependency tree
     is averaged and then the final activation function is
     applied. 
@@ -150,10 +59,10 @@ def train_model(model, feeder,
     output_folder = 'SSE_result/',
     train_test_ratio = 0.75,
     loss_fn_name = nn.KLDivLoss,
-    opt_fn_name = optim.Adam,
+    optim_fn_name = optim.Adam,
     learning_rate = 0.01,
     model_outfile = 'model_weights.pkl',
-    output_log = 'logfile.txt',
+    output_log = 'train_logfile.txt',
     max_data = np.inf,
     max_iter = 3):
     '''
@@ -180,7 +89,7 @@ def train_model(model, feeder,
     # Use sum, not average.
     loss_fn = loss_fn_name(size_average=False)
     # Initialize the optimizer
-    optimizer = opt_fn_name(model.parameters(),lr = learning_rate)
+    optimizer = optim_fn_name(model.parameters(),lr = learning_rate)
 
     # Save the parameters of the function call. It allows me to audit the models
     with open(os.path.join(outpath,output_log),'wb') as fparam:
@@ -231,19 +140,19 @@ def train_model(model, feeder,
                     str(lossval)+', iteration:'+str(iter)
                 print status_msg
                 fparam.write(status_msg + '\n')
+        # Write the average loss of last iteration
         status_msg = 'Average Loss in last iteration:{}\n'.format(np.mean(losslist))
         print status_msg
         fparam.write(status_msg)
-    #Calculate classifier performance for the training data                
     # Save the model
     model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
 
-def read_output_log(result_dir = 'SSE_result/',logfile = 'logfile.txt'):
+def read_output_log(result_dir = 'SSE_result/',logfile = 'train_logfile.txt'):
     '''
-    Given a output folder containing log, model and misc file
-    (output of the trainer function), this function reads the
-    log and returns the training indices and model.
+    Given a output folder containing the log and model file
+    (generated by the train_model function), this function reads the
+    log and returns the test indices and the model.
     It also plots the losses as an added convenience.
     '''
     inpath = os.path.join(ted_data_path,result_dir)
@@ -270,7 +179,7 @@ def read_output_log(result_dir = 'SSE_result/',logfile = 'logfile.txt'):
                 # Find the model file
                 modelfile = aline.strip().split('=')[1]
             else:
-                print aline
+                print aline.strip()
         # Save a plot of the loss
         __plot_losses__(alllosses,os.path.join(inpath,'losses.eps'))
         # Load the trained model
@@ -278,11 +187,18 @@ def read_output_log(result_dir = 'SSE_result/',logfile = 'logfile.txt'):
         return test_idx, model
 
 def evaluate_model(test_idx, model, loss_fn, data_feeder, \
-        y_gt_dict, threshold, y_labels, outfilename, max_data = np.inf):
+    y_gt_dict, threshold, y_labels, outfilename, max_data = np.inf):
     '''
-    Evaluate a trained model with the held out data.
-    The input to this function can be obtained from read_output_log
-    and ted_talk_data_feeder.binarized_ratings.
+    Evaluate a trained model with the held out dataset.
+    Most of the inputs to this function can be obtained from the
+    ted_talk_data_feeder.binarized_ratings function. The model argument takes
+    the pretrained model that is under evaluation.
+    This function returns the results of evaluation (e.g. precision, recall,
+    accuracy, f1 score etc.) as well as the average loss over the held out data.
+    The results are returned as a dictionary. This dictionary is also saved
+    as a pickle file. outfilename should contain the full path of this result
+    file. max_data specifies how many of the held out data (test_idx) will be
+    used for actual evaluation.
     '''
     test_losses=[]
     result_map = {}
@@ -321,11 +237,14 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     cp.dump(results,open(outfilename+'.pkl','wb'))
     return results
 
-def combine_results(resultfilename,folder_suffix='run_'):
+def combine_results(resultfilename,folder_prefix='run_'):
     '''
-    Combine the results pickle files from multiple runs by averaging
+    This function reads the pickle files containing model evaluation results
+    (obtained by executing evaluate_model function) and computes the average.
+    These pickle files are assumed to be located in different folders starting
+    with the same prefix in the ted_data_path. 
     '''
-    infolders = glob.glob(os.path.join(ted_data_path,folder_suffix)+'*')
+    infolders = glob.glob(os.path.join(ted_data_path,folder_prefix)+'*')
     combined={}
     for afolder in infolders:
         results = cp.load(open(os.path.join(afolder,resultfilename)))
@@ -339,6 +258,45 @@ def combine_results(resultfilename,folder_suffix='run_'):
         combined[akey] = np.mean(combined[akey],axis=0).tolist()
     combined['order']=results['order']
     return combined
+
+def error_analysis(resultfile='devset_classification_result.pkl',\
+    train_log='train_logfile.txt',folder_prefix='run_',outfile='error_analysis.eps'):
+    '''
+    This function reads the model evaluation results (obtained by executing 
+    evaluate_model function) and plots the losses with respect to model
+    parameters (sense_dim).
+    The results are assumed to be located in different folders starting
+    with the same prefix in the ted_data_path.
+    '''
+    infolders = glob.glob(os.path.join(ted_data_path,folder_prefix)+'*')
+    outfilename = os.path.join(ted_data_path,outfile)
+    senselist=[]
+    trainlosslist=[]
+    testlosslist=[]
+    for afolder in infolders:
+        logfilename = os.path.join(afolder,train_log)
+        resultfile = os.path.join(afolder,resultfile)
+        # Read the training log
+        with open(logfilename) as fin:
+            for aline in fin:
+                if aline.startswith('sense_dim'):
+                    senselist.append(int(aline.strip().split('=')[1]))
+                if aline.startswith('Average Loss in last iteration'):
+                    trainlosslist.append(float(aline.strip().split(':')[1]))
+        # Read the result file
+        results = cp.load(open(resultfile))
+        testlosslist.append(results['average_loss'])
+    # Plot the numbers
+    plt.figure(1)
+    plt.clf()
+    plt.plot(senselist,trainlosslist,color='blue',label='Train Loss')
+    plt.plot(senselist,testlosslist,color='red',label='Test Loss')
+    plt.xlabel('Sense Vector Length (Model Complexity)')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig(outfilename)
+    plt.close()    
+    return senselist,trainlosslist,testlosslist
 
 def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
     outfilename='',bypass_ROC=True):
@@ -391,7 +349,7 @@ def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
     return results
 
 def __plot_losses__(alllosses,dest):
-    # Plot the losses
+    # Plots the losses
     plt.figure(1)
     plt.clf()
     plt.semilogy(alllosses)
@@ -400,8 +358,13 @@ def __plot_losses__(alllosses,dest):
     plt.savefig(dest)
     plt.close()
 
+# ----------------------------- Unit Test Codes -------------------------------
+
 def exp0_debug_train_test_SSE_small_data():
-    # Sample code to train and evaluate the model over a small data
+    '''
+    Unit test code to train and evaluate the model over a small data
+    '''
+    # ===== TRAIN =====
     start_time = time.time()
     # Build the model
     model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
@@ -409,8 +372,8 @@ def exp0_debug_train_test_SSE_small_data():
     train_model(model, __tree_rating_feeder__,\
         output_folder = 'SSE_result/',max_data=10)
     print 'Training time:',time.time() - start_time
-    ################################################################
-    # Evaluate the model
+    
+    # ===== TEST =====
     start_time = time.time()
     # Binarize the ratings for the whole dataset
     y_bin, thresh, label_names = ttdf.binarized_ratings()
@@ -418,14 +381,18 @@ def exp0_debug_train_test_SSE_small_data():
     test_idx, model = read_output_log(result_dir = 'SSE_result/')
     # Prepare loss function
     loss_fn = nn.KLDivLoss(size_average=False)
-    # Evaluate the model
+    # Prepare the output file
     outfile = os.path.join(ted_data_path,'SSE_result/devset_classification_result')
+    # Evaluate the model
     evaluate_model(test_idx, model, loss_fn, data_feeder = __tree_rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile, max_data=5)
     print 'Evaluation time:',time.time() - start_time
 
 def exp1_train_SSE(outdir):
+    '''
+    Unit test code to train the model
+    '''
     start_time = time.time()
     # Build the model
     model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
@@ -435,6 +402,9 @@ def exp1_train_SSE(outdir):
 
 
 def exp2_evaluate_SSE(outdir):
+    '''
+    Unit test code to evaluate the model
+    '''
     start_time = time.time()
     # Prepare to evaluate
     y_bin, thresh, label_names = ttdf.binarized_ratings()
