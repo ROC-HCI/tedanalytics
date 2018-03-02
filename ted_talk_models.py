@@ -38,7 +38,7 @@ class SyntacticSemanticEngine(nn.Module):
     tree along with the distributed representations of the corresponding words.
     '''
     def __init__(self,dep_dict,pos_dict,glove_voc,reduced=True,GPUnum=-1,
-        sensedim=8,activation=F.relu,final_activation=F.log_softmax):
+        sensedim=8,output_dim=14,activation=F.relu,final_activation=F.log_softmax):
         '''
         To initiate, provide dictionaries that map to indices from dependency
         relations (dep_dict) and parts of speech (pos_dict).
@@ -56,6 +56,8 @@ class SyntacticSemanticEngine(nn.Module):
         # Size of the learnable parameters
         # Sense vector size
         self.s = sensedim
+        # Output dimension
+        self.outdim = output_dim
         # Word vector size
         self.N = len(glove_voc['the'])
         # Dependency vocabulary size
@@ -72,13 +74,13 @@ class SyntacticSemanticEngine(nn.Module):
         # Define the network parameters
         self.D = multiLinear(self.d,self.s,self.s)
         self.P = multiLinear(self.p,self.N,self.s)
-        # self.linear = nn.Linear(self.s,self.outdim)
+        self.linear = nn.Linear(self.s,self.outdim)
         # For GPU
         if self.gpu >= 0:
             with torch.cuda.device(self.gpu):
                 self.D = self.D.cuda()
                 self.P = self.P.cuda()
-                # self.linear = self.linear.cuda()
+                self.linear = self.linear.cuda()
         
         # Set activations
         self.activation = activation
@@ -159,7 +161,7 @@ class SyntacticSemanticEngine(nn.Module):
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
                 bag_of_dtree_result.append(self.final_activation(\
-                    self.encodetree(atree)))
+                    self.linear(self.encodetree(atree))))
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
         else:
             # If reduced, the output of each individual dependency tree
@@ -169,7 +171,7 @@ class SyntacticSemanticEngine(nn.Module):
                 if atree is None:
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
-                bag_of_dtree_result.append(self.encodetree(atree))
+                bag_of_dtree_result.append(self.linear(self.encodetree(atree)))
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
             # The final result is calculated as an average of the
             # bag of dependency trees

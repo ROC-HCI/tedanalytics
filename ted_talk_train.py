@@ -57,7 +57,7 @@ def __tree_rating_feeder__(atalk,gpunum=-1):
 
 def train_model(model, feeder,
     output_folder = 'SSE_result/',
-    train_test_ratio = 0.75,
+    train_test_ratio = 0.85,
     loss_fn_name = nn.KLDivLoss,
     optim_fn_name = optim.Adam,
     learning_rate = 0.01,
@@ -259,7 +259,7 @@ def combine_results(resultfilename,folder_prefix='run_'):
     combined['order']=results['order']
     return combined
 
-def error_analysis(resultfile='devset_classification_result.pkl',\
+def error_analysis(resultfile='dev_result.pkl',\
     train_log='train_logfile.txt',folder_prefix='run_',outfile='error_analysis.eps'):
     '''
     This function reads the model evaluation results (obtained by executing 
@@ -275,7 +275,7 @@ def error_analysis(resultfile='devset_classification_result.pkl',\
     testlosslist=[]
     for afolder in infolders:
         logfilename = os.path.join(afolder,train_log)
-        resultfile = os.path.join(afolder,resultfile)
+        currentresultfile = os.path.join(afolder,resultfile)
         # Read the training log
         with open(logfilename) as fin:
             for aline in fin:
@@ -283,9 +283,14 @@ def error_analysis(resultfile='devset_classification_result.pkl',\
                     senselist.append(int(aline.strip().split('=')[1]))
                 if aline.startswith('Average Loss in last iteration'):
                     trainlosslist.append(float(aline.strip().split(':')[1]))
-        # Read the result file
-        results = cp.load(open(resultfile))
+        # Read the current result file
+        results = cp.load(open(currentresultfile))
         testlosslist.append(results['average_loss'])
+    # Sort results
+    idx = np.argsort(senselist)
+    senselist,trainlosslist,testlosslist = zip(*[(senselist[i],\
+            trainlosslist[i],testlosslist[i]) for i in idx])
+
     # Plot the numbers
     plt.figure(1)
     plt.clf()
@@ -382,42 +387,69 @@ def exp0_debug_train_test_SSE_small_data():
     # Prepare loss function
     loss_fn = nn.KLDivLoss(size_average=False)
     # Prepare the output file
-    outfile = os.path.join(ted_data_path,'SSE_result/devset_classification_result')
+    outfile = os.path.join(ted_data_path,'SSE_result/dev_result')
     # Evaluate the model
     evaluate_model(test_idx, model, loss_fn, data_feeder = __tree_rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile, max_data=5)
     print 'Evaluation time:',time.time() - start_time
 
-def exp1_train_SSE(outdir):
+def exp1_train_SSE(sense_dim=14, outdir='run_0/', max_iter = 5,
+    reduced_val=True,
+    gpunum = -1,
+    train_test_ratio = 0.85,
+    loss_fn_name = nn.KLDivLoss,
+    optim_fn_name = optim.Adam,
+    learning_rate = 0.01,
+    model_outfile = 'model_weights.pkl',
+    output_log = 'train_logfile.txt',    
+    max_data = np.inf,
+    ):
     '''
-    Unit test code to train the model
+    Unit test code to train the model with rating data
     '''
     start_time = time.time()
     # Build the model
-    model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
+    model = __build_SSE__(reduced_val,sense_dim,gpunum)
     # Train model
-    train_model(model, __tree_rating_feeder__,output_folder = outdir,max_iter = 10)
+    train_model(model, __tree_rating_feeder__, outdir, train_test_ratio,
+        loss_fn_name, optim_fn_name, learning_rate, model_outfile,
+        output_log, max_data, max_iter)
     print 'Training time:',time.time() - start_time
 
 
-def exp2_evaluate_SSE(outdir):
+def exp2_evaluate_SSE(outdir,result_filename='dev_result',
+    loss_fn_name = nn.KLDivLoss):
     '''
-    Unit test code to evaluate the model
+    Unit test code to evaluate the model with held out dataset
     '''
     start_time = time.time()
     # Prepare to evaluate
     y_bin, thresh, label_names = ttdf.binarized_ratings()
     test_idx, model = read_output_log(result_dir = outdir)
-    loss_fn = nn.KLDivLoss(size_average=False)
-    outfile = os.path.join(os.path.join(ted_data_path,outdir),'devset_classification_result')
+    loss_fn = loss_fn_name(size_average=False)
+    outfile = os.path.join(os.path.join(ted_data_path,outdir),result_filename)
     # Evaluate the model
-    evaluate_model(test_idx, model, loss_fn, data_feeder = __tree_rating_feeder__,\
+    results = evaluate_model(test_idx, model, loss_fn,\
+        data_feeder = __tree_rating_feeder__,\
         y_gt_dict = y_bin, threshold = thresh, y_labels=label_names,\
         outfilename = outfile)
     print 'Evaluation time:',time.time() - start_time
 
+def exp3_run_in_Bluehive():
+    '''
+    Run the training and test module with appropriate parameters in Bluehive
+    '''
+    taskID = int(os.environ['SLURM_ARRAY_TASK_ID'])
+    senselist = [2,4,8,10,12,16,18,20,25,32]
+    print 'TaskID = ',taskID
+    exp1_train_SSE(sense_dim=senselist[taskID],outdir='run_{}/'.format(taskID))
+    print 'Training Done'
+    exp2_evaluate_SSE(outdir='run_{}/'.format(taskID))
+    print 'Evaluation Done'
+
+
 
 if __name__=='__main__':
-    exp0_debug_train_test_SSE_small_data()
+    exp3_run_in_Bluehive()
 
