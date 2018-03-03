@@ -45,8 +45,8 @@ class SyntacticSemanticEngine(nn.Module):
         If GPUnum>=0, Cuda version of the tensors would be used. If you don't
         want to use GPU, set GPUnum=-1
         If the output is not reduced, the final activation is applied over
-        all the dependency trees in the input and then it is
-        result is stacked together and returned.
+        all the dependency trees in the input and then the result are stacked
+        together and returned.
         If reduced, the output of each individual dependency tree
         is averaged and then the final activation function is
         applied
@@ -179,6 +179,196 @@ class SyntacticSemanticEngine(nn.Module):
                 bag_of_dtree_result.mean(dim=0))
         return bag_of_dtree_result      
 
+class RevisedTreeEncoder(nn.Module):
+    '''
+    A revised (as of Feb 26th, 2018) version of the Syntactic Semantic Engine.
+    TODO: Test Thoroughly
+    '''
+    def __init__(self,dep_dict,pos_dict,glove_voc,reduced=True,GPUnum=-1,
+        sensedim=8,output_dim=14,activation=F.relu,final_activation=F.log_softmax):
+        '''
+        To initiate, provide dictionaries that map to indices from dependency
+        relations (dep_dict) and parts of speech (pos_dict). If the output is
+        not reduced, the final activation is applied over all the dependency
+        trees in the input and then the results are stacked together and 
+        returned. If reduced, the output of each individual dependency tree is
+        averaged and then the final activation function is applied
+        '''
+        super(RevisedTreeEncoder,self).__init__()
+        self.reduce = reduced
+        # Size of the learnable parameters
+        self.s = sensedim
+        self.outdim = output_dim
+        # Word vector size
+        self.N = len(glove_voc['the'])
+        # Dependency vocabulary size
+        self.d = len(dep_dict)
+        # POS vocabulary size
+        self.p = len(pos_dict)
+        # Use GPU or not and device number
+        self.gpu = GPUnum
+
+        # Process and save the word2vec dictionary
+        self.glove_tensor = torch.Tensor(glove_voc.values())
+        self.glove_voc = {akey:i for i,akey in enumerate(glove_voc.keys())}
+
+        # Zero wordvector for initialization
+        self.wvec_init = torch.from_numpy(np.zeros((1,self.N),dtype=np.float32))
+        self.hin_init = torch.from_numpy(np.zeros((1,self.s),dtype=np.float32))
+
+        # Model parameters. W = Global word projector, D = dependency embedder
+        # P = pos embedder and linear = output projector
+        self.W = nn.Linear(self.N,self.s)
+        # Transformation for dependency type
+        self.D = nn.Embedding(self.d,self.s**2,max_norm=1.,norm_type=2.)
+        self.c = nn.Embedding(self.d,self.s,max_norm=1.,norm_type=2.)
+        # Transformation for POS
+        self.P = nn.Embedding(self.p,self.s**2,max_norm=1.,norm_type=2.)
+        self.b = nn.Embedding(self.p,self.s,max_norm=1.,norm_type=2.)
+        # Output layer
+        self.linear = nn.Linear(self.s,self.outdim)   
+
+        # For GPU
+        if self.gpu >= 0:
+            # Move model parameters to GPU
+            self.D = self.D.cuda(self.gpu)
+            self.P = self.P.cuda(self.gpu)
+            self.linear = self.linear.cuda(self.gpu)
+            self.wvec_init = self.wvec_init.cuda(self.gpu)
+            self.hin_init = self.hin_init.cuda(self.gpu)
+            # Preallocate pos and dep dicts in a torch-preferred format
+            self.dep_dict = {key:autograd.Variable(\
+                torch.LongTensor([val])).cuda(self.gpu) for \
+                key,val in dep_dict.items()}
+            self.pos_dict = {key:autograd.Variable(\
+                torch.LongTensor([val])).cuda(self.gpu) for \
+                key,val in pos_dict.items()}
+            self.glove_tensor = self.glove_tensor.cuda(self.gpu)
+        else:
+            # Preallocate pos and dep dicts in a torch-preferred format
+            self.dep_dict = {key:autograd.Variable(\
+                    torch.LongTensor([val])) for key,val in dep_dict.items()}
+            self.pos_dict = {key:autograd.Variable(\
+                    torch.LongTensor([val])) for key,val in pos_dict.items()}
+        
+        # Set activations
+        self.activation = activation
+        self.final_activation = final_activation
+    
+    def __build_wvec__(self,w):
+        '''
+        Construct the wordvectors in torch-preferred format
+        '''
+        wpart_sum = autograd.Variable(self.wvec_init)
+        # =====  DEBUG =======
+        # TODO: Delete it
+        assert wpart_sum.sum().data[0]==0,'self.wvec_init changed'
+        wpart_count = 0
+        # If the word is not available in the dictionary, try
+        # breaking it into parts. If that doesn't work either,
+        # just use zero.
+        if w not in self.glove_voc and '-' in w:
+            wparts = w.split('-')
+        elif w not in self.glove_voc and '.' in w:
+            wparts = w.split('.')
+        else:
+            wparts = [w]
+        # average the wordparts
+        for wpart in wparts:
+            if wpart in self.glove_voc:
+                voc_idx = self.glove_voc[wpart]
+                if wpart_count == 0:
+                    wpart_sum = self.glove_tensor[voc_idx,:].view(1,-1)
+                else:
+                    wpart_sum += self.glove_tensor[voc_idx,:].view(1,-1)
+                wpart_count+=1
+        # Final wordvector
+        wvec = wpart_sum/float(wpart_count) if wpart_count>0 else wpart_sum
+        return autograd.Variable(wvec)
+
+    def __process_node__(self,w,p,d,hin):
+        '''
+        Procedure to encode a single node in the tree
+        ''' 
+        # Actual operation on a node
+        xin = self.__build_wvec__(w)
+        xproj = self.W(xin)
+        # mapping for POS
+        i_p = self.pos_dict[p]
+        i_d = self.dep_dict[d]
+        u = self.activation(torch.mm(xproj,self.P(i_p).view(self.s,self.s))\
+            +self.b(i_p)+hin)
+        hout = self.activation(torch.mm(u,self.D(i_d).view(self.s,self.s))+\
+            self.c(i_d))
+        return hout
+
+    def encodetree(self,atree):
+        '''
+        Recursively encodes a dependency tree to its embedding vector
+        '''
+        hout_sum = None
+        count = 0.
+        if not atree:
+            raise IOError('Tree cannot be empty')
+        # Loop over all children
+        for i,anode in enumerate(atree):
+            # If leaf node
+            if type(anode) == unicode or type(anode)==str:
+                # lookahead if the next node is a subtree
+                if i < len(atree)-1 and type(atree[i+1])==list:
+                    # Next node is a subtree, process it first
+                    hin = self.encodetree(atree[i+1])
+                else:
+                    # This node doesn't have any child. set hin to zero
+                    hin = autograd.Variable(self.hin_init)
+                    # =====  DEBUG =======
+                    # TODO: Delete it
+                    assert hin.sum().data[0]==0,'self.hin_init changed'
+                # Compute the current node
+                w,p,d = anode.strip().encode('ascii','ignore').split()
+                hout = self.__process_node__(w,p,d,hin)
+                # Add all the children values together
+                if hout_sum is None:
+                    hout_sum = hout
+                    count = 1.
+                else:
+                    hout_sum+=hout
+                    count+=1.
+        # Return the average of the children
+        return torch.div(hout_sum,count)
+
+    def forward(self,bag_of_dtree):
+        '''
+        Produce the model output of a bag_of_dtree
+        '''
+        bag_of_dtree_result = []
+        if not self.reduce:
+            # If not reduced, the final activation is applied over
+            # all the dependency trees in the input and then the
+            # results are stacked together and returned
+            for atree in bag_of_dtree:
+                if atree is None:
+                    raise IOError('Can not contain empty data')
+                # Calculate the embedding vector for each component
+                bag_of_dtree_result.append(self.final_activation(\
+                    self.linear(self.encodetree(atree))))
+            bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
+        else:
+            # If reduced, the output of each individual dependency tree
+            # is averaged and then the final activation function is
+            # applied
+            for atree in bag_of_dtree:
+                if atree is None:
+                    raise IOError('Can not contain empty data')
+                # Calculate the embedding vector for each component
+                bag_of_dtree_result.append(self.linear(self.encodetree(atree)))
+            bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
+            # The final result is calculated as an average of the
+            # bag of dependency trees
+            bag_of_dtree_result = self.final_activation(\
+                bag_of_dtree_result.mean(dim=0))
+        return bag_of_dtree_result      
+
 def __test_encodetree__():
     '''
     For testing purpose only. Checks the encodetree function in the SSE
@@ -191,6 +381,24 @@ def __test_encodetree__():
     x = [x,x]
     _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
     model = SyntacticSemanticEngine(dep_dict,pos_dict,wdict,\
+        GPUnum=-1,sensedim=3)
+    print 'model input',x
+    y = model(x)
+    print 'model output',y
+
+def __test_encodetree_revisedModel__():
+    '''
+    For testing purpose only. Checks the encodetree function in the
+    revised tree encoder
+    '''
+    wdict = {'thank':[0.,0.,1.],'you':[0.,1.,0.],'so':[0.1,0.,0.],\
+    'much':[0,0.,0.1],'chris':[0.1,0.1,0.1],',':[0.2,0.2,0.2],\
+    '.':[0.3,0.3,0.3],'the':[0.4,0.4,0.4]}
+    x = [u'thank VBP ROOT',[u'you PRP dobj',u'much RB advmod',\
+    [u'so RB advmod'],u', , punct',u'chris FW dobj',u'. . punct']]
+    x = [x,x]
+    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
+    model = RevisedTreeEncoder(dep_dict,pos_dict,wdict,reduced=True,
         GPUnum=-1,sensedim=3)
     print 'model input',x
     y = model(x)

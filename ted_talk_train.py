@@ -21,8 +21,8 @@ import ted_talk_data_feeder as ttdf
 import ted_talk_models as ttm
 from TED_data_location import ted_data_path
 
-def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
-    final_activation=F.log_softmax):
+def __build_model__(reduced_val,sense_dim=14,gpunum=-1,\
+    final_activation=F.log_softmax,modelClass=ttm.SyntacticSemanticEngine):
     '''
     Initiate a Syntactic-Semantic-Engine and initiates with data.
     If reduced, the output of each individual dependency tree
@@ -34,7 +34,7 @@ def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
     _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
     wvec = ttdf.read_crop_glove()
     # Initialize the model
-    model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
+    model = modelClass(dep_dict,pos_dict,wvec,\
         reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
         final_activation=final_activation)
     print 'Model Initialized'
@@ -372,7 +372,7 @@ def exp0_debug_train_test_SSE_small_data():
     # ===== TRAIN =====
     start_time = time.time()
     # Build the model
-    model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
+    model = __build_model__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
     train_model(model, __tree_rating_feeder__,\
         output_folder = 'SSE_result/',max_data=10)
@@ -404,13 +404,13 @@ def exp1_train_SSE(sense_dim=14, outdir='run_0/', max_iter = 5,
     model_outfile = 'model_weights.pkl',
     output_log = 'train_logfile.txt',    
     max_data = np.inf,
-    ):
+    modelClass=ttm.RevisedTreeEncoder):
     '''
     Unit test code to train the model with rating data
     '''
     start_time = time.time()
     # Build the model
-    model = __build_SSE__(reduced_val,sense_dim,gpunum)
+    model = __build_model__(reduced_val,sense_dim,gpunum,modelClass)
     # Train model
     train_model(model, __tree_rating_feeder__, outdir, train_test_ratio,
         loss_fn_name, optim_fn_name, learning_rate, model_outfile,
@@ -436,12 +436,13 @@ def exp2_evaluate_SSE(outdir,result_filename='dev_result',
         outfilename = outfile)
     print 'Evaluation time:',time.time() - start_time
 
+
 def exp3_run_in_Bluehive():
     '''
     Run the training and test module with appropriate parameters in Bluehive
     '''
     taskID = int(os.environ['SLURM_ARRAY_TASK_ID'])
-    senselist = [2,4,8,10,12,16,18,20,25,32]
+    senselist = [2,8,12,14,18,20,22,25,28,30]
     print 'TaskID = ',taskID
     exp1_train_SSE(sense_dim=senselist[taskID],outdir='run_{}/'.format(taskID))
     print 'Training Done'
