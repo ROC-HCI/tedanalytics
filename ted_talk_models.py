@@ -6,6 +6,7 @@ from torch.nn.parameter import Parameter
 import torch.optim as optim
 import ted_talk_data_feeder as ttdf
 
+import time
 import numpy as np
 from TED_data_location import ted_data_path, wordvec_path
 
@@ -231,8 +232,11 @@ class RevisedTreeEncoder(nn.Module):
         # For GPU
         if self.gpu >= 0:
             # Move model parameters to GPU
+            self.W = self.W.cuda(self.gpu)
             self.D = self.D.cuda(self.gpu)
+            self.c = self.c.cuda(self.gpu)
             self.P = self.P.cuda(self.gpu)
+            self.b = self.b.cuda(self.gpu)
             self.linear = self.linear.cuda(self.gpu)
             self.wvec_init = self.wvec_init.cuda(self.gpu)
             self.hin_init = self.hin_init.cuda(self.gpu)
@@ -259,10 +263,7 @@ class RevisedTreeEncoder(nn.Module):
         '''
         Construct the wordvectors in torch-preferred format
         '''
-        wpart_sum = autograd.Variable(self.wvec_init)
-        # =====  DEBUG =======
-        # TODO: Delete it
-        assert wpart_sum.sum().data[0]==0,'self.wvec_init changed'
+        wpart_sum = self.wvec_init
         wpart_count = 0
         # If the word is not available in the dictionary, try
         # breaking it into parts. If that doesn't work either,
@@ -321,9 +322,6 @@ class RevisedTreeEncoder(nn.Module):
                 else:
                     # This node doesn't have any child. set hin to zero
                     hin = autograd.Variable(self.hin_init)
-                    # =====  DEBUG =======
-                    # TODO: Delete it
-                    assert hin.sum().data[0]==0,'self.hin_init changed'
                 # Compute the current node
                 w,p,d = anode.strip().encode('ascii','ignore').split()
                 hout = self.__process_node__(w,p,d,hin)
@@ -369,6 +367,10 @@ class RevisedTreeEncoder(nn.Module):
                 bag_of_dtree_result.mean(dim=0))
         return bag_of_dtree_result      
 
+
+
+# ----------------------------- Unit Test Codes -------------------------------
+
 def __test_encodetree__():
     '''
     For testing purpose only. Checks the encodetree function in the SSE
@@ -391,18 +393,66 @@ def __test_encodetree_revisedModel__():
     For testing purpose only. Checks the encodetree function in the
     revised tree encoder
     '''
-    wdict = {'thank':[0.,0.,1.],'you':[0.,1.,0.],'so':[0.1,0.,0.],\
-    'much':[0,0.,0.1],'chris':[0.1,0.1,0.1],',':[0.2,0.2,0.2],\
-    '.':[0.3,0.3,0.3],'the':[0.4,0.4,0.4]}
+    start_time = time.time()
+    wdict = {'thank':[0.1,0.1,1.],'you':[0.2,1.,0.6],'so':[0.1,0.7,0.2],\
+    'much':[0.9,0.1,0.1],'chris':[0.4,0.1,0.1],',':[0.6,0.2,0.6],\
+    '.':[0.3,0.6,0.1],'the':[0.1,0.1,0.4]}
+    dep_dict = {'ROOT':0,'dobj':1,'advmod':2,'punct':3}
+    pos_dict = {'VBP':0,'PRP':1,'RB':2,',':3,'FW':4,'.':5}
     x = [u'thank VBP ROOT',[u'you PRP dobj',u'much RB advmod',\
     [u'so RB advmod'],u', , punct',u'chris FW dobj',u'. . punct']]
     x = [x,x]
-    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
     model = RevisedTreeEncoder(dep_dict,pos_dict,wdict,reduced=True,
-        GPUnum=-1,sensedim=3)
+        GPUnum=-1,sensedim=3,output_dim=2)
+    optimizer = optim.Adam(model.parameters(),lr = 0.01)
+    loss_fn = nn.KLDivLoss(size_average=False)
+    gt = autograd.Variable(torch.Tensor([[0,1]]))
+    # Training loop
+    for iter in range(1000):
+        model.zero_grad()
+        log_probs = model(x)
+        loss = loss_fn(log_probs,gt)
+        loss.backward()
+        optimizer.step()
+        print 'loss:',loss.data[0]
+
     print 'model input',x
     y = model(x)
-    print 'model output',y
+    print 'model output',torch.exp(y).data.numpy()
+    print 'Evaluation time:',time.time() - start_time
+
+def __test_encodetree_revisedModel_GPU__():
+    '''
+    For testing purpose only. Checks the encodetree function in the
+    revised tree encoder
+    '''
+    start_time = time.time()
+    wdict = {'thank':[0.1,0.1,1.],'you':[0.2,1.,0.6],'so':[0.1,0.7,0.2],\
+    'much':[0.9,0.1,0.1],'chris':[0.4,0.1,0.1],',':[0.6,0.2,0.6],\
+    '.':[0.3,0.6,0.1],'the':[0.1,0.1,0.4]}
+    dep_dict = {'ROOT':0,'dobj':1,'advmod':2,'punct':3}
+    pos_dict = {'VBP':0,'PRP':1,'RB':2,',':3,'FW':4,'.':5}
+    x = [u'thank VBP ROOT',[u'you PRP dobj',u'much RB advmod',\
+    [u'so RB advmod'],u', , punct',u'chris FW dobj',u'. . punct']]
+    x = [x,x]
+    model = RevisedTreeEncoder(dep_dict,pos_dict,wdict,reduced=True,
+        GPUnum=0,sensedim=3,output_dim=2)
+    optimizer = optim.Adam(model.parameters(),lr = 0.01)
+    loss_fn = nn.KLDivLoss(size_average=False)
+    gt = autograd.Variable(torch.Tensor([[0,1]])).cuda(0)
+    # Training loop
+    for iter in range(1000):
+        model.zero_grad()
+        log_probs = model(x)
+        loss = loss_fn(log_probs,gt)
+        loss.backward()
+        optimizer.step()
+        print 'loss:',loss.data[0]
+
+    print 'model input',x
+    y = model(x)
+    print 'model output',torch.exp(y).cpu().data.numpy()    
+    print 'Evaluation time:',time.time() - start_time
 
 def __test_with_multiLinear__(gpunum=-1):
     '''

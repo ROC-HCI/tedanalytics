@@ -21,8 +21,8 @@ import ted_talk_data_feeder as ttdf
 import ted_talk_models as ttm
 from TED_data_location import ted_data_path
 
-def __build_model__(reduced_val,sense_dim=14,gpunum=-1,\
-    final_activation=F.log_softmax,modelClass=ttm.SyntacticSemanticEngine):
+def __build_SSE__(reduced_val,sense_dim=14,gpunum=-1,\
+    final_activation=F.log_softmax):
     '''
     Initiate a Syntactic-Semantic-Engine and initiates with data.
     If reduced, the output of each individual dependency tree
@@ -34,7 +34,45 @@ def __build_model__(reduced_val,sense_dim=14,gpunum=-1,\
     _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
     wvec = ttdf.read_crop_glove()
     # Initialize the model
-    model = modelClass(dep_dict,pos_dict,wvec,\
+    model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
+        reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
+        final_activation=final_activation)
+    print 'Model Initialized'
+    return model
+
+def __build_RTE__(reduced_val,sense_dim=2,output_dim=14,gpunum=-1,\
+    final_activation=F.log_softmax):
+    '''
+    Initiate a Syntactic-Semantic-Engine and initiates with data.
+    If reduced, the output of each individual dependency tree
+    is averaged and then the final activation function is
+    applied. 
+    '''
+    # Reading Vocabs
+    print 'Reading Vocabs'
+    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
+    wvec = ttdf.read_crop_glove()
+    # Initialize the model
+    model = ttm.RevisedTreeEncoder(dep_dict,pos_dict,wvec,\
+        reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
+        output_dim=output_dim,final_activation=final_activation)
+    print 'Model Initialized'
+    return model
+
+def __revised_TreeEncoder__(reduced_val,sense_dim=14,gpunum=-1,\
+    final_activation=F.log_softmax):
+    '''
+    Initiate a Syntactic-Semantic-Engine and initiates with data.
+    If reduced, the output of each individual dependency tree
+    is averaged and then the final activation function is
+    applied. 
+    '''
+    # Reading Vocabs
+    print 'Reading Vocabs'
+    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
+    wvec = ttdf.read_crop_glove()
+    # Initialize the model
+    model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
         reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
         final_activation=final_activation)
     print 'Model Initialized'
@@ -372,7 +410,7 @@ def exp0_debug_train_test_SSE_small_data():
     # ===== TRAIN =====
     start_time = time.time()
     # Build the model
-    model = __build_model__(reduced_val=True,sense_dim=14,gpunum=-1)
+    model = __build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
     train_model(model, __tree_rating_feeder__,\
         output_folder = 'SSE_result/',max_data=10)
@@ -394,23 +432,24 @@ def exp0_debug_train_test_SSE_small_data():
         outfilename = outfile, max_data=5)
     print 'Evaluation time:',time.time() - start_time
 
-def exp1_train_SSE(sense_dim=14, outdir='run_0/', max_iter = 5,
+def exp1_train_SSE(sense_dim=14, outdir='run_0/', max_iter = 10,
     reduced_val=True,
     gpunum = -1,
-    train_test_ratio = 0.85,
+    train_test_ratio = 0.80,
     loss_fn_name = nn.KLDivLoss,
     optim_fn_name = optim.Adam,
     learning_rate = 0.01,
     model_outfile = 'model_weights.pkl',
-    output_log = 'train_logfile.txt',    
+    output_log = 'train_logfile.txt',
     max_data = np.inf,
-    modelClass=ttm.RevisedTreeEncoder):
+    model_initiator_fn=__build_RTE__):
     '''
     Unit test code to train the model with rating data
     '''
     start_time = time.time()
     # Build the model
-    model = __build_model__(reduced_val,sense_dim,gpunum,modelClass)
+    model = model_initiator_fn(reduced_val,sense_dim=sense_dim,\
+        output_dim=14,gpunum=gpunum)
     # Train model
     train_model(model, __tree_rating_feeder__, outdir, train_test_ratio,
         loss_fn_name, optim_fn_name, learning_rate, model_outfile,
