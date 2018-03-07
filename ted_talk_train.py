@@ -59,24 +59,26 @@ def __build_RTE__(reduced_val,sense_dim=2,output_dim=14,gpunum=-1,\
     print 'Model Initialized'
     return model
 
-def __revised_TreeEncoder__(reduced_val,sense_dim=14,gpunum=-1,\
-    final_activation=F.log_softmax):
-    '''
-    Initiate a Syntactic-Semantic-Engine and initiates with data.
-    If reduced, the output of each individual dependency tree
-    is averaged and then the final activation function is
-    applied. 
-    '''
-    # Reading Vocabs
-    print 'Reading Vocabs'
-    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
-    wvec = ttdf.read_crop_glove()
-    # Initialize the model
-    model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
-        reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
-        final_activation=final_activation)
-    print 'Model Initialized'
-    return model
+
+#def __revised_TreeEncoder__(reduced_val,sense_dim=14,gpunum=-1,\
+#    final_activation=F.log_softmax):
+#    '''
+#    Initiate a Syntactic-Semantic-Engine and initiates with data.
+#    If reduced, the output of each individual dependency tree
+#    is averaged and then the final activation function is
+#    applied. 
+#    '''
+#    # Reading Vocabs
+#    print 'Reading Vocabs'
+#    _,dep_dict,_,pos_dict = ttdf.read_dep_pos_vocab()
+#    wvec = ttdf.read_crop_glove()
+#    # Initialize the model
+#    model = ttm.SyntacticSemanticEngine(dep_dict,pos_dict,wvec,\
+#        reduced=reduced_val,GPUnum=gpunum,sensedim=sense_dim,\
+#        final_activation=final_activation)
+#    print 'Model Initialized'
+#    return model
+
 
 def __tree_rating_feeder__(atalk,gpunum=-1):
     '''
@@ -442,14 +444,13 @@ def exp1_train_SSE(sense_dim=14, outdir='run_0/', max_iter = 10,
     model_outfile = 'model_weights.pkl',
     output_log = 'train_logfile.txt',
     max_data = np.inf,
-    model_initiator_fn=__build_RTE__):
+    model_initiator_fn=__build_SSE__):
     '''
     Unit test code to train the model with rating data
     '''
     start_time = time.time()
     # Build the model
-    model = model_initiator_fn(reduced_val,sense_dim=sense_dim,\
-        output_dim=14,gpunum=gpunum)
+    model = model_initiator_fn(reduced_val,sense_dim=sense_dim,gpunum=gpunum)
     # Train model
     train_model(model, __tree_rating_feeder__, outdir, train_test_ratio,
         loss_fn_name, optim_fn_name, learning_rate, model_outfile,
