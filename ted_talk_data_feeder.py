@@ -7,6 +7,9 @@ import ted_talk_makeindex
 import list_of_talks as lst_talks
 from TED_data_location import ted_data_path, wordvec_path
 
+import torch
+import torch.autograd as autograd
+
 def split_train_test(train_ratio=0.7):
     '''
     Split the list of valid talk id's in training and test sets.
@@ -187,7 +190,29 @@ def __traverse__(atree):
             words.update(__traverse__(anode))
     return words
 
-if __name__=='__main__':
+def __tree_rating_feeder__(atalk,gpunum=-1):
+    '''
+    Helper function to feed the dependency trees and the ratings to the model.
+    It transforms the data and the ground truth in appropriate format so that
+    it can be used as a feeder-function argument for train_model function.
+    '''
+    # All the dependency trees and the rating
+    all_deptree,y,_ = get_dep_rating(atalk)
+    # Construct ground truth tensor
+    if gpunum < 0:
+        rating_t = autograd.Variable(torch.FloatTensor(y))
+    else:
+        with torch.cuda.device(gpunum):
+            rating_t = autograd.Variable(torch.cuda.FloatTensor(y))
+    return all_deptree,rating_t.view(1,-1)
+
+def main():
+    '''
+    This function prepares the dataset for the code. It must run at least
+    once after linking the code with the dataset. Before running, please
+    make sure that the TED_data_location.py file is updated with the correct
+    data location.
+    '''
     print 'preparing data'
     print 'please make sure that the TED_data_location.py file is updated'+\
         'with the correct data location'
@@ -197,4 +222,7 @@ if __name__=='__main__':
     reload(lst_talks)
     print 'Preparing the glove dictionary'
     crop_glove_dictionary()
+
+if __name__=='__main__':
+    main()
 

@@ -22,7 +22,7 @@ class multiLinear(nn.Module):
     def forward(self,i,x):
         return torch.mm(x,self.weight[i,:,:].t())+self.bias[i]
 
-def def_tensor(gpunum,listobj):
+def __def_tensor__(gpunum,listobj):
     '''
     Helper Function.
     This function defines a tensor considering whether or not to use the GPU.
@@ -111,7 +111,7 @@ class SyntacticSemanticEngine(nn.Module):
         wvec = wpart_sum/float(wpart_count) if wpart_count>0 else wpart_sum
         wvec = wvec.tolist()
         # Actual operation on a node
-        xin = def_tensor(self.gpu,wvec)
+        xin = __def_tensor__(self.gpu,wvec)
         u = self.activation(self.P(self.pos_dict[p],xin)+hin)
         hout = self.activation(self.D(self.dep_dict[d],u))
         return hout
@@ -134,7 +134,7 @@ class SyntacticSemanticEngine(nn.Module):
                     hin = self.encodetree(atree[i+1])
                 else:
                     # This node doesn't have any child. set hin to zero
-                    hin = def_tensor(self.gpu,[0 for i in range(self.s)])
+                    hin = __def_tensor__(self.gpu,[0 for i in range(self.s)])
                 # Compute the current node
                 w,p,d = anode.strip().encode('ascii','ignore').split()
                 hout = self.__process_node__(w,p,d,hin)
@@ -500,6 +500,9 @@ def __test_with_multiLinear__(gpunum=-1):
     print model.state_dict()                    
 
 if __name__=='__main__':
+    '''
+    Test with multilinear
+    '''
     import time
     start_time = time.time()
     np.random.seed(0)
