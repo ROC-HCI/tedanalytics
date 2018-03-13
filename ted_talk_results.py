@@ -7,6 +7,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import torch
+
 from TED_data_location import ted_data_path
 
 
@@ -97,8 +99,9 @@ def loss_vs_sense(resultfile='dev_result.pkl',\
     plt.ylabel('Loss')
     plt.legend()
     plt.savefig(outfilename)
-    plt.close()    
-    return senselist,trainlosslist,testlosslist
+    plt.close()
+    print 'Figure saved in:',outfilename
+    return senselist, trainlosslist, testlosslist
 
 def average_results(resultfilename,folder_prefix='run_'):
     '''

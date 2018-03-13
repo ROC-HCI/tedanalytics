@@ -151,10 +151,7 @@ class SyntacticSemanticEngine(nn.Module):
         # Return the average of the children
         return torch.div(hout_sum,count)
 
-    def forward(self,bag_of_dtree):
-        '''
-        Produce the model output of a bag_of_dtree
-        '''
+    def __process_a_bag__(self,bag_of_dtree):
         bag_of_dtree_result = []
         if not self.reduce:
             # If not reduced, the final activation is applied over
@@ -164,6 +161,8 @@ class SyntacticSemanticEngine(nn.Module):
                 if atree is None:
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
+                # dimension of operation should be specified 
+                # for log_softmax now
                 if self.final_activation is F.log_softmax:
                     bag_of_dtree_result.append(self.final_activation(\
                         self.linear(self.encodetree(atree)),dim=1))
@@ -185,11 +184,17 @@ class SyntacticSemanticEngine(nn.Module):
             # bag of dependency trees
             if self.final_activation is F.log_softmax:
                 bag_of_dtree_result = self.final_activation(\
-                    bag_of_dtree_result.mean(dim=0),dim=0)
+                    bag_of_dtree_result.mean(dim=0),dim=0).view(1,-1)
             else:
                 bag_of_dtree_result = self.final_activation(\
-                    bag_of_dtree_result.mean(dim=0))
-        return bag_of_dtree_result      
+                    bag_of_dtree_result.mean(dim=0)).view(1,-1)
+        return bag_of_dtree_result        
+
+    def forward(self,bag_of_dtree):
+        '''
+        Produce the model output of a bag_of_dtree
+        '''
+        return self.__process_a_bag__(bag_of_dtree)
 
 class RevisedTreeEncoder(nn.Module):
     '''
@@ -346,10 +351,7 @@ class RevisedTreeEncoder(nn.Module):
         # Return the average of the children
         return torch.div(hout_sum,count)
 
-    def forward(self,bag_of_dtree):
-        '''
-        Produce the model output of a bag_of_dtree
-        '''
+    def __process_a_bag__(self,bag_of_dtree):
         bag_of_dtree_result = []
         if not self.reduce:
             # If not reduced, the final activation is applied over
@@ -359,9 +361,11 @@ class RevisedTreeEncoder(nn.Module):
                 if atree is None:
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
+                # dimension of operation should be specified 
+                # for log_softmax now
                 if self.final_activation is F.log_softmax:
                     bag_of_dtree_result.append(self.final_activation(\
-                        self.linear(self.encodetree(atree))),dim=1)
+                        self.linear(self.encodetree(atree)),dim=1))
                 else:
                     bag_of_dtree_result.append(self.final_activation(\
                         self.linear(self.encodetree(atree))))
@@ -380,12 +384,17 @@ class RevisedTreeEncoder(nn.Module):
             # bag of dependency trees
             if self.final_activation is F.log_softmax:
                 bag_of_dtree_result = self.final_activation(\
-                    bag_of_dtree_result.mean(dim=0),dim=0)
+                    bag_of_dtree_result.mean(dim=0),dim=0).view(1,-1)
             else:
                 bag_of_dtree_result = self.final_activation(\
-                    bag_of_dtree_result.mean(dim=0))
-        return bag_of_dtree_result      
+                    bag_of_dtree_result.mean(dim=0)).view(1,-1)
+        return bag_of_dtree_result        
 
+    def forward(self,bag_of_dtree):
+        '''
+        Produce the model output of a bag_of_dtree
+        '''
+        return self.__process_a_bag__(bag_of_dtree)
 
 
 # ----------------------------- Unit Test Codes -------------------------------

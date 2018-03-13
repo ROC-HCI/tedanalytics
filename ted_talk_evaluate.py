@@ -1,4 +1,10 @@
 import numpy as np
+import cPickle as cp
+import sklearn.metrics as met
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 
 def evaluate_model(test_idx, model, loss_fn, data_feeder, \
