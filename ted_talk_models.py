@@ -17,15 +17,18 @@ class multiLinear(nn.Module):
     '''
     def __init__(self,dic_len,in_size,out_size):
         super(multiLinear,self).__init__()
-        self.weight = Parameter(torch.randn(dic_len,out_size,in_size))
+        self.weight = Parameter(torch.randn(dic_len,in_size,out_size))
         self.bias = Parameter(torch.randn(dic_len,1,out_size))
     def forward(self,i,x):
-        return torch.mm(x,self.weight[i,:,:].t())+self.bias[i]
+        return torch.matmul(x,self.weight[i,:,:])+self.bias[i]
 
 def __def_tensor__(gpunum,listobj):
     '''
     Helper Function.
     This function defines a tensor considering whether or not to use the GPU.
+    TODO: Set for deprecation. Utilize proper GPU handling technique mentioned
+    in pytorch tutorial:
+    http://pytorch.org/docs/0.3.1/notes/cuda.html#memory-management
     '''
     if gpunum < 0:
         return autograd.Variable(torch.Tensor([listobj]))
@@ -454,61 +457,113 @@ def __test_encodetree_revisedModel_GPU__():
     print 'model output',torch.exp(y).cpu().data.numpy()    
     print 'Evaluation time:',time.time() - start_time
 
-def __test_with_multiLinear__(gpunum=-1):
+
+
+def __test_with_multiLinear__(gpunum=-1,nb_input = 3000,inp_dim = 300,
+    out_dim = 20,nb_linear = 5,minibatch_size = 50,nb_iter = 25000,
+    early_to_GPU=False,use_pinned=False):
     '''
-    For testing purpose only. This is a simple test to check if the
-    multiLinear module works or not.
-    Works perfectly.
+    For testing purpose only. This is a simple test to check (1) if the
+    multiLinear module works or not (2) Effect of GPU, and (3) Effect
+    of pinned memory.
+    If gpunum == -1 cpu will be used. Otherwise, GPU will be used
+    Results:
+    (1) Works perfectly.
+    (2) Pinned memory has little to no effect or worse effect
+    (3) Putting the variables early to GPU improves performance
     '''
-    # dictionary length x input size x output size
-    model = multiLinear(2,3,2)
+
+    # Ideal weights (The learned weights should contain these values)
+    w1 = torch.randn(inp_dim,out_dim)
+    b1 = torch.randn(1,out_dim)
+    w2 = torch.randn(inp_dim,out_dim)
+    b2 = torch.randn(1,out_dim)
+
+    # Inputs and outputs
+    X = torch.randn(nb_input,inp_dim)
+    y1 = torch.matmul(X,w1)+b1
+    y2 = torch.matmul(X,w2)+b2
+
+    # Pin inputs and outputs. Try enabling and disabling this
+    if use_pinned:
+        X = X.pin_memory()
+        y1 = y1.pin_memory()
+        y2 = y2.pin_memory()
+
+    # Model: dictionary length x input size x output size
+    model = multiLinear(nb_linear,inp_dim,out_dim)
     # Optimizer
     optimizer = optim.Adam(model.parameters(),lr=0.001)
-    # Input and output
-    w1 = autograd.Variable(torch.Tensor([[1,0,0],[0,0,-1]])).t()
-    b1 = autograd.Variable(torch.Tensor([[1,1]]))
-    w2 = autograd.Variable(torch.Tensor([[0,-1,0],[1,0,0]])).t()
-    b2 = autograd.Variable(torch.Tensor([[2,-2]]))
+
+    # Put model to gpu
     if gpunum >= 0:
         model = model.cuda(gpunum)
-        w1,b1,w2,b2 = w1.cuda(gpunum),b1.cuda(gpunum),w2.cuda(gpunum),b2.cuda(gpunum)
+        if early_to_GPU:
+            # putting the input output in GPU early
+            X,y1,y2 = X.cuda(gpunum),y1.cuda(gpunum),y2.cuda(gpunum)
 
     # training steps
-    for i in range(25000):
-        if gpunum >= 0:
-            x1 = autograd.Variable(torch.rand(1,3)).cuda(gpunum)
-            x2 = autograd.Variable(torch.rand(1,3)).cuda(gpunum)
-        else:
-            x1 = autograd.Variable(torch.rand(1,3))
-            x2 = autograd.Variable(torch.rand(1,3))
+    for i in range(nb_iter):
+        # Create minibatch
+        batch_idx = np.random.rand(minibatch_size)*nb_input
+        X_batch = X[batch_idx,:]
+        y1_batch = y1[batch_idx,:]
+        y2_batch = y2[batch_idx,:]
+
+        # Put minibatch to GPU
+        if gpunum >= 0 and not early_to_GPU:
+            X_batch = X_batch.cuda(gpunum)
+            y1_batch = y1_batch.cuda(gpunum)
+            y2_batch = y2_batch.cuda(gpunum)
+
+        # Put to Variable
+        X_batch = autograd.Variable(X_batch)
+        y1_batch = autograd.Variable(y1_batch)
+        y2_batch = autograd.Variable(y2_batch)
         
-        y1 = torch.mm(x1,w1)+b1
-        print 'input 1',x1
-        print 'output 1',y1
-        y2 = torch.matmul(x2,w2)+b2
-        print 'input 2',x2
-        print 'output 2',y2
+        # Remove previous gradients
         model.zero_grad()
-        # Calculate the loss
-        loss = torch.sqrt(torch.pow(model(0,x1)-y1,2).sum()+\
-            torch.pow(model(1,x2)-y2,2).sum())
+
+        # Pass through the model
+        y1_out = model(0,X_batch)
+        y2_out = model(1,X_batch)
+
+        # Calculate the MSE loss
+        loss = torch.sqrt(torch.pow(y1_out-y1_batch,2).sum()+\
+            torch.pow(y2_out-y2_batch,2).sum())
+
         # Calculate gradients by backpropagation and update parameters
         loss.backward()
         optimizer.step()
         # print loss
-        print 'loss =',loss
-    print model.state_dict()                    
+        print 'iter:',i,'loss =',loss.data[0]
+    print 'model:'
+    print model.state_dict()
+    print 'model targets:'
+    print w1,b1,w2,b2
 
 if __name__=='__main__':
     '''
     Test with multilinear
     '''
-    import time
     start_time = time.time()
-    np.random.seed(0)
-    __test_with_multiLinear__(gpunum=-1)
-    print 'Elapsed Time:',time.time() - start_time
-    start_time = time.time()
-    np.random.seed(0)
-    __test_with_multiLinear__(gpunum=0)
+
+    # Time: 66.1393 sec
+    # __test_with_multiLinear__(gpunum=-1,early_to_GPU=False,use_pinned=False)
+
+    # Time: 68.41 sec
+    # __test_with_multiLinear__(gpunum=-1,early_to_GPU=False,use_pinned=True)    
+    
+    # Time: 82.311 sec
+    # __test_with_multiLinear__(gpunum=0,early_to_GPU=False,use_pinned=True)
+
+    # Time: 82.281 sec
+    # __test_with_multiLinear__(gpunum=0,early_to_GPU=False,use_pinned=False)
+
+    # Time: 49.51 sec
+    __test_with_multiLinear__(gpunum=0,early_to_GPU=True,use_pinned=False)
+
+    # Time: 49.53 sec
+    # __test_with_multiLinear__(gpunum=0,early_to_GPU=True,use_pinned=True)    
+
     print 'Elapsed Time:',time.time() - start_time
