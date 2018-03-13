@@ -1,7 +1,9 @@
 import os
 import time
+import numpy as np
 
 import torch.nn as nn
+import torch.optim as optim
 
 import sklearn as sl
 import sklearn.metrics as met
@@ -17,7 +19,7 @@ def exp0_debug_train_test_SSE_small_data():
     '''
     # ===== TRAIN =====
     start_time = time.time()
-    # Build the model
+    # Build the model. Also try ttt.__build_RTE__
     model = ttt.__build_SSE__(reduced_val=True,sense_dim=14,gpunum=-1)
     # Train model
     ttt.train_model(model, ttdf.__tree_rating_feeder__,\
@@ -50,9 +52,10 @@ def exp1_train(sense_dim=14, outdir='run_0/', max_iter = 10,
     model_outfile = 'model_weights.pkl',
     output_log = 'train_logfile.txt',
     max_data = np.inf,
-    model_initiator_fn=ttt.__build_SSE__):
+    model_initiator_fn=ttt.__build_RTE__):
     '''
     Unit test code to train the model with rating data
+    Also try model_initiator_fn=ttt.__build_SSE__
     '''
     start_time = time.time()
     # Build the model

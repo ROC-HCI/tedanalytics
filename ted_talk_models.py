@@ -164,8 +164,12 @@ class SyntacticSemanticEngine(nn.Module):
                 if atree is None:
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
-                bag_of_dtree_result.append(self.final_activation(\
-                    self.linear(self.encodetree(atree))))
+                if self.final_activation is F.log_softmax:
+                    bag_of_dtree_result.append(self.final_activation(\
+                        self.linear(self.encodetree(atree)),dim=1))
+                else:
+                    bag_of_dtree_result.append(self.final_activation(\
+                        self.linear(self.encodetree(atree))))
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
         else:
             # If reduced, the output of each individual dependency tree
@@ -179,8 +183,12 @@ class SyntacticSemanticEngine(nn.Module):
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
             # The final result is calculated as an average of the
             # bag of dependency trees
-            bag_of_dtree_result = self.final_activation(\
-                bag_of_dtree_result.mean(dim=0))
+            if self.final_activation is F.log_softmax:
+                bag_of_dtree_result = self.final_activation(\
+                    bag_of_dtree_result.mean(dim=0),dim=0)
+            else:
+                bag_of_dtree_result = self.final_activation(\
+                    bag_of_dtree_result.mean(dim=0))
         return bag_of_dtree_result      
 
 class RevisedTreeEncoder(nn.Module):
@@ -351,8 +359,12 @@ class RevisedTreeEncoder(nn.Module):
                 if atree is None:
                     raise IOError('Can not contain empty data')
                 # Calculate the embedding vector for each component
-                bag_of_dtree_result.append(self.final_activation(\
-                    self.linear(self.encodetree(atree))))
+                if self.final_activation is F.log_softmax:
+                    bag_of_dtree_result.append(self.final_activation(\
+                        self.linear(self.encodetree(atree))),dim=1)
+                else:
+                    bag_of_dtree_result.append(self.final_activation(\
+                        self.linear(self.encodetree(atree))))
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
         else:
             # If reduced, the output of each individual dependency tree
@@ -366,8 +378,12 @@ class RevisedTreeEncoder(nn.Module):
             bag_of_dtree_result = torch.cat(bag_of_dtree_result,dim=0)
             # The final result is calculated as an average of the
             # bag of dependency trees
-            bag_of_dtree_result = self.final_activation(\
-                bag_of_dtree_result.mean(dim=0))
+            if self.final_activation is F.log_softmax:
+                bag_of_dtree_result = self.final_activation(\
+                    bag_of_dtree_result.mean(dim=0),dim=0)
+            else:
+                bag_of_dtree_result = self.final_activation(\
+                    bag_of_dtree_result.mean(dim=0))
         return bag_of_dtree_result      
 
 

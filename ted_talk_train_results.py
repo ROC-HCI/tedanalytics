@@ -7,6 +7,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from TED_data_location import ted_data_path
+
 
 def read_output_log(result_dir = 'SSE_result/',logfile = 'train_logfile.txt'):
     '''
