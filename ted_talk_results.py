@@ -66,12 +66,14 @@ def loss_vs_sense(resultfile='dev_result.pkl',\
     parameters (sense_dim).
     The results are assumed to be located in different folders starting
     with the same prefix in the ted_data_path.
+    The output plot is saved in outfile. However, if outfile is None, no
+    plot is saved.
     '''
     infolders = glob.glob(os.path.join(ted_data_path,folder_prefix)+'*')
-    outfilename = os.path.join(ted_data_path,outfile)
     senselist=[]
     trainlosslist=[]
     testlosslist=[]
+    combined = {}
     for afolder in infolders:
         logfilename = os.path.join(afolder,train_log)
         currentresultfile = os.path.join(afolder,resultfile)
@@ -84,26 +86,58 @@ def loss_vs_sense(resultfile='dev_result.pkl',\
                     trainlosslist.append(float(aline.strip().split(':')[1]))
         # Read the current result file
         results = cp.load(open(currentresultfile))
-        testlosslist.append(results['average_loss'])
+        for akey in results:
+            if results[akey] and akey!='order':
+                if not akey in combined:
+                    combined[akey] = [results[akey]]
+                else:
+                    combined[akey].append(results[akey])
     # Sort results
     idx = np.argsort(senselist)
-    senselist,trainlosslist,testlosslist = zip(*[(senselist[i],\
-            trainlosslist[i],testlosslist[i]) for i in idx])
+    senselist,trainlosslist = zip(*[(senselist[i],trainlosslist[i]) \
+        for i in idx])
+    for akey in combined:
+        combined[akey] = [combined[akey][i] for i in idx]
 
     # Plot the numbers
-    plt.figure(1)
-    plt.clf()
-    plt.plot(senselist,trainlosslist,color='blue',label='Train Loss')
-    plt.plot(senselist,testlosslist,color='red',label='Test Loss')
-    plt.xlabel('Sense Vector Length (Model Complexity)')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig(outfilename)
-    plt.close()
-    print 'Figure saved in:',outfilename
-    return senselist, trainlosslist, testlosslist
+    if outfile:
+        # Plot the loss
+        name,ext = ''.join(outfile.split('.')[:-1]),'.'+outfile.split('.')[-1]
+        outfilename = os.path.join(ted_data_path,name+'_loss'+ext)
+        plt.figure(1)
+        plt.clf()
+        plt.plot(senselist,trainlosslist,color='blue',label='Train Loss')
+        plt.plot(senselist,combined['average_loss'],\
+            color='red',label='Test Loss')
+        plt.xlabel('Sense Vector Length (Model Complexity)')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.savefig(outfilename)
+        plt.close()
+        print 'Loss figure saved in:',outfilename
 
-def average_results(resultfilename,folder_prefix='run_'):
+        for akey in combined:
+            if akey=='average_loss':
+                continue
+            # Plot other results
+            outfilename = os.path.join(ted_data_path,name+'_'+akey+ext)
+            plt.figure(2)
+            plt.clf()
+            
+            plt.plot(senselist,combined[akey])
+            plt.xticks(senselist)
+            plt.grid(True)
+            plt.xlabel('Sense Vector Length (Model Complexity)')
+            plt.ylabel('Metric Value')
+            plt.legend(results['order'])
+            plt.title('Test Result for '+akey)
+            plt.savefig(outfilename)
+            plt.close()
+            print akey+' figure saved in:',outfilename
+
+    return senselist, trainlosslist, testlosslist,combined
+
+def average_results(result_pklfilename='dev_result.pkl',folder_prefix='run_'):
     '''
     This function reads the pickle files containing model evaluation results
     (obtained by executing evaluate_model function) and computes the average.
@@ -113,7 +147,7 @@ def average_results(resultfilename,folder_prefix='run_'):
     infolders = glob.glob(os.path.join(ted_data_path,folder_prefix)+'*')
     combined={}
     for afolder in infolders:
-        results = cp.load(open(os.path.join(afolder,resultfilename)))
+        results = cp.load(open(os.path.join(afolder,result_pklfilename)))
         for akey in results:
             if results[akey] and akey!='order':
                 if not akey in combined:

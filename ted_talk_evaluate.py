@@ -78,7 +78,7 @@ def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
         if gt_unq.shape[0] <= 1:
             print col_labels[col]
             print 'Data sample contains one or less class ... skipping'
-            results[col_labels[col]]={}
+            results[col_labels[col]]=[]
             continue
         # Calculating results
         prec,rec,fscore, support = met.precision_recall_fscore_support(\
