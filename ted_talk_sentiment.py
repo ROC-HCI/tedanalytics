@@ -4,28 +4,16 @@ import cPickle as cp
 import numpy as np
 from itertools import product
 from scipy.stats import ttest_ind
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import nltk
 nltk.download('punkt')
 from nltk.tokenize import sent_tokenize
 from bluemix import parse_sentence_tone
-#from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-'''
-Dict of talks with highest view count and Lowest view counts
-Note, while calculating the lowest view counts, I took only
-the talks that are at least two years old (i.e. retention time
-is greater than 730 days). This is done to ignore the too new
-talks
-'''
-hi_lo_files = {
-            'High_View_Talks':[66,1569,848,549,229,96,618,1647,2034,1377,685,
-                1246,1344,97,741,206,1821,1815,2405,2399,310,453,652,92,2458,
-                2217,1733,1764,1100,70],
-            'Low_View_Talks':[524,239,1359,313,318,1263,1341,1452,674,394,
-                1294,339,1445,402,500,427,962,268,679,925,1373,403,439,220,
-                675,379,345,1466,673,1332]
-               }
+from TED_data_location import ted_data_path
+from list_of_talks import hi_lo_files
 
 ############################### Generic Readers ##############################
 '''
@@ -46,16 +34,15 @@ containing the transcripts in a specific format
 #        data['talk_transcript'] for anitem in apara]))
 #    return sent_tokenize(txt)
 
-def read_bluemix(pklfile,sentiment_dir='./bluemix_sentiment/'):
+def read_bluemix(pklfile,sentiment_dir='TED_feature_bluemix_scores/'):
     '''
     Reads all the sentences and their corresponding bluemix sentiments.
     Note: DONOT change the name of this function. It is used somewhere
     else in the code
     '''
-    pklfile = sentiment_dir+pklfile.split('/')[-1]
+    pklpath = os.path.join(ted_data_path,sentiment_dir)
+    pklfile = os.path.join(pklpath,str(pklfile)+'.pkl')
     assert os.path.isfile(pklfile),'File not found: '+pklfile
-    assert os.path.isfile(pklfile),'Sentiment file not found: '+pklfile+\
-        ' \nCheck the sentiment_dir argument'
     data = cp.load(open(pklfile))
     assert data.get('sentences_tone'), \
         'Sentence-wise sentiment is not available: {0}'.format(pklfile)
@@ -92,24 +79,6 @@ class Sentiment_Comparator(object):
     It contains the following inputs and variables:
     groups        : Input dictionary with group name as keys and the talk indices
                     as values
-    reader        : reader takes a function to read the transcripts of the talk.
-                    It can take either the read_sentences function
-                    or the read_utterances -- indicating that the transcriptions
-                    would be read sentence by sentence or utterance by utterance
-                    Note that bluemix reader works little differently than the
-                    other readers. It (bluemix) extracts the sentiments while
-                    reading the sentences.
-    extractor     : If the reader is chosen anything other than bluemix reader,
-                    then we should also specify a sentiment extractor (extractor).
-                    The extractor variable takes a function. The job of the 
-                    extractor function is to take one sentence at a time and 
-                    extract the sentiment as efficiently as possible. The 
-                    function specifies the method of extracting sentiments.
-                    The easiest way to extract sentiment is to use the 
-                    vaderSentiment package. The vadersentiment()
-                    function uses this package. Look into the Sentiment 
-                    Extractors section.
-    inputFolder   : Folder where the .pkl files reside
     raw_sentiments: A dictionary storing the raw sentiments.
                     The keys are the talk ids and values
                     are matrices for which columns represent sentiment as
@@ -124,19 +93,10 @@ class Sentiment_Comparator(object):
     '''
     def __init__(self,
                 dict_groups,
-                reader=read_bluemix,
-                extractor=read_bluemix,
-                inputFolder='./talks/',
                 process=True):
-        self.inputpath=inputFolder
-        self.reader = reader    
-        self.extractor = extractor
         self.groups = dict_groups
         self.alltalks = [ids for agroup in self.groups \
             for ids in self.groups[agroup]]
-        # The bluemix reader needs special treatment
-        if self.reader.func_name=='read_bluemix':
-            self.extractor = None
         
         self.raw_sentiments = {}
         self.sentiments_interp={}
@@ -146,6 +106,14 @@ class Sentiment_Comparator(object):
             self.extract_raw_sentiment()
             self.smoothen_raw_sentiment()
             self.intep_sentiment_series()
+
+    # Fill out self.raw_sentiments
+    def extract_raw_sentiment(self):
+        for i,atalk in enumerate(self.alltalks):
+            scores,header,_ = read_bluemix(atalk,'TED_feature_bluemix_scores/')
+            if i==0:
+                self.column_names = header
+            self.raw_sentiments[atalk] = scores
 
     def reform_groups(self,new_dict_groups):
         '''
@@ -163,26 +131,6 @@ class Sentiment_Comparator(object):
         self.sentiments_interp = {atalk:self.sentiments_interp[atalk] \
             for akey in new_dict_groups \
                 for atalk in new_dict_groups[akey] }
-
-    # Fill out self.raw_sentiments
-    def extract_raw_sentiment(self):
-        for i,atalk in enumerate(self.alltalks):
-            # The bluemix reader needs special treatment
-            if self.reader.func_name=='read_bluemix':
-                filename = self.inputpath+str(atalk)+'.pkl'
-                scores,header,_ = self.reader(filename)
-                if i==0:
-                    self.column_names = header
-                self.raw_sentiments[atalk] = scores
-            else:
-                sents = self.reader(self.inputpath+str(atalk)+'.pkl')
-                values = []
-                for asent in sents:
-                    results,header=self.extractor(asent)
-                    values.append(results)
-                if i==0:
-                    self.column_names = header
-                self.raw_sentiments[atalk] = np.array(values)
 
     # Changes the self.raw_sentiments to a smoothed version
     def smoothen_raw_sentiment(self,kernelLen=5):
@@ -271,11 +219,7 @@ class Sentiment_Comparator(object):
         assert talkid in self.back_ref.keys(),\
             'The specified talkid is not present in the talklist'
         sent_ind=[]
-        # Reads the sentences
-        if self.reader.func_name=='read_bluemix':
-            _,_,sentences = self.reader(self.inputpath+str(talkid)+'.pkl')
-        else:
-            sentences = self.reader(self.inputpath+str(talkid)+'.pkl')
+        _,_,sentences = read_bluemix(talkid,'TED_feature_bluemix_scores/')
         # Print the desired ones
         print 'talkid:',talkid
         print '================='
@@ -459,16 +403,17 @@ def namefix(astr):
 ############################################################################
 
 def main():
-    #comparator = Sentiment_Comparator(hi_lo_files,read_utterances,vadersentiment)
     comparator = Sentiment_Comparator(hi_lo_files)
     grp_avg = comparator.calc_group_mean()
+    outfilepath = os.path.join(ted_data_path,'TED_stats/')
+    outfilename = os.path.join(outfilepath,'Ensemble_Avg_Sent.eps')
     draw_group_mean_sentiments(grp_avg,
-        comparator.column_names)
-        #,outfilename='./plots/Ensemble_Avg_Sent.eps')
+        comparator.column_names,outfilename=outfilename)
+    outfilename = os.path.join(outfilepath,'Time_Avg_Sent.eps')
     time_avg,pvals = comparator.calc_time_mean()
     draw_time_mean_sentiments(time_avg,
         comparator.column_names,
-        pvals)#,outfilename='./plots/Time_Avg_Sent.eps')
+        pvals,outfilename=outfilename)
     
 
 

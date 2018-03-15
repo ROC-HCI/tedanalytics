@@ -37,6 +37,9 @@ test_set = set([ 233,  665,  263,  195,  660,   75, 1315, 1090, 1944,  614, 1565
        2700,  470, 2391, 1645, 2049, 1517, 1862])
 
 # Process and make the talk id's and talk ratings ready
+# Makes the following two global variables available:
+# all_valid_talks
+# all_ratings
 reader = csv.DictReader(open('./index.csv','rU'))
 all_valid_talks = []
 all_ratings = {}
@@ -49,6 +52,15 @@ for arow in reader:
         all_valid_talks.append(atalk)
         all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}
 test_set=list(test_set)
+
+# A small list of files 
+hi_lo_files = {
+            'High_View_Talks':[66,1569,848,549,229,96,618,1647,2034,1377,685,
+                1246,1344,97,741,206,1821,1815,2405,2399,310,453,652,92,2458,
+                2217,1733,1764,1100,70],
+            'Low_View_Talks':[524,239,1359,313,318,1263,1341,1452,674,394,
+                1294,339,1445,402,500,427,962,268,679,925,1373,403,439,220,
+                675,379,345,1466,673,1332]}
 
 allrating_samples = \
 [
