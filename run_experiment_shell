@@ -9,4 +9,4 @@
 #SBATCH -e /scratch/mtanveer/output/eval_error%j
 
 module load anaconda
-python ted_talk_train.py
+python ted_talk_deep_learning_experiments.py

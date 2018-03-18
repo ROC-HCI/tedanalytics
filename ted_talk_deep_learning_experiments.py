@@ -16,7 +16,7 @@ from TED_data_location import ted_data_path
 
 def exp0a_debug_train_SSE_small_data():
     '''
-    Unit test code to train the model over a small data
+    Unit test code to train the deep learning model over a small data
     '''
     # ===== TRAIN =====
     start_time = time.time()
@@ -29,7 +29,7 @@ def exp0a_debug_train_SSE_small_data():
 
 def exp0b_debug_test_SSE_small_data():
     '''
-    Unit test code to evaluate the model over a small data
+    Unit test code to evaluate the deep learning model over a small data
     '''
     start_time = time.time()
     # Binarize the ratings for the whole dataset
@@ -48,7 +48,7 @@ def exp0b_debug_test_SSE_small_data():
 
 def exp0c_debug_train_RTE_small_data():
     '''
-    Unit test code to train the model (RTE) over a small data
+    Unit test code to train the deep learning model (RTE) over a small data
     '''
     # ===== TRAIN =====
     start_time = time.time()
@@ -72,7 +72,7 @@ def exp1_train(sense_dim = 14, outdir = 'run_0/', max_iter = 10,
     max_data = np.inf,
     model_initiator_fn = ttt.__build_RTE__):
     '''
-    Unit test code to train the model with rating data
+    Unit test code to train the deep learning models with rating data
     Also try model_initiator_fn=ttt.__build_SSE__
     '''
     start_time = time.time()
@@ -88,7 +88,7 @@ def exp1_train(sense_dim = 14, outdir = 'run_0/', max_iter = 10,
 def exp2_evaluate(outdir,result_filename = 'dev_result',
     loss_fn_name = nn.KLDivLoss):
     '''
-    Unit test code to evaluate the model with held out dataset
+    Unit test code to evaluate the deep learning model with held out dataset
     '''
     start_time = time.time()
     # Prepare to evaluate
@@ -106,7 +106,8 @@ def exp2_evaluate(outdir,result_filename = 'dev_result',
 
 def exp3_run_in_Bluehive():
     '''
-    Run the training and test module with appropriate parameters in Bluehive
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
     '''
     taskID = int(os.environ['SLURM_ARRAY_TASK_ID'])
     senselist = [2,8,12,14,18,20,22,25,28,30]
@@ -115,3 +116,7 @@ def exp3_run_in_Bluehive():
     print 'Training Done'
     exp2_evaluate(outdir='run_{}/'.format(taskID))
     print 'Evaluation Done'
+
+if __name__=='__main__':
+    # Control from here which experiment is going to run
+    exp3_run_in_Bluehive()

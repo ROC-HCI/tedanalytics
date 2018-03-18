@@ -4,6 +4,8 @@ import operator as op
 from list_of_talks import all_valid_talks
 from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import f_oneway,ttest_ind
 
@@ -12,7 +14,7 @@ def load_all_scores():
     This function loads all the valid TED talks in two groups. The
     groups are arbitrarily formed by just splitting the list in two halves.
     The score array has a shape N x M x B, where N is the total
-    number of talks (2007), M is the interpolated length of each talk (100)
+    number of talks, M is the interpolated length of each talk (100)
     and B is the number of Bluemix Scores (13).
     Note: This function takes time
     '''
@@ -44,18 +46,22 @@ def get_clust_dict(X,clusterer,comparator):
             result_dict['cluster_'+str(lab)]=[talkid]
     return result_dict
 
-def clust_onescore_stand(X_1,clusterer,comparator):
+def clust_onescore_stand(X_1,clusterer,comparator,perform_stand=True):
     '''
-    Similar to get_clust_dict. But it will performs clustering assuming there is
+    Similar to get_clust_dict. But it will perform clustering assuming there is
     only one sentiment score. Practically it is equivalent to considering that 
     X_1 is of order 2 (NxM), instead of 3 (NxMxB). In addition, it performs 
-    z-score standardization of the rows of X_1 (i.e. each talk).
+    z-score standardization of the rows of X_1 (i.e. each talk) if 
+    perform_stand is set True.
     '''
     result_dict = {}
-    mean_ = np.mean(X_1,axis=1)[None].T
-    std_ = np.std(X_1,axis=1)[None].T
-    Z = (X_1-mean_)/std_
-    clusterer.fit(Z)
+    if perform_stand:
+        mean_ = np.mean(X_1,axis=1)[None].T
+        std_ = np.std(X_1,axis=1)[None].T
+        Z = (X_1-mean_)/std_
+        clusterer.fit(Z)
+    else:
+        clusterer.fit(X_1)
     labls = clusterer.labels_
     for lab,talkid in zip(labls,comparator.alltalks):
         if result_dict.get('cluster_'+str(lab)):
@@ -64,20 +70,22 @@ def clust_onescore_stand(X_1,clusterer,comparator):
             result_dict['cluster_'+str(lab)]=[talkid]
     return result_dict
 
-def clust_separate_stand(X,clusterer,comparator,csvcontent,csv_vid_idx):
+def clust_separate_stand(X,clusterer,comparator,csvcontent,\
+    csv_vid_idx,perform_stand=True):
     '''
     Cluster the videos for each individual score. Notice that it 
     formulates different clusters while considering different scores.
     Although it is a bit slow due to some recomputations, but this 
     would give better results in the clustering. Also, it z-score 
-    standardizes each TED talks signal which would reveal the 
-    storytelling patterns better.
+    standardizes each TED talks (if perform_stand is set True.) which
+    would reveal the storytelling patterns better.
     '''
     N,M,B = X.shape
     avg_dict = {}
     for s in range(B):
         # Perform clustering over each score
-        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,comparator)
+        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,\
+            comparator,perform_stand)
         comparator.reform_groups(clust_dict)
         avg = comparator.calc_group_mean()
         # Although it computed the average for all the columns, I need

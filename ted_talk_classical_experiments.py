@@ -1,12 +1,17 @@
 import ted_talk_sentiment as ts
-from list_of_talks import allrating_samples,all_valid_talks
 import ted_talk_cluster_analysis as tca
 import ted_talk_prediction as tp
 from ted_talk_statistic import plot_statistics
 from ted_talk_statistic_correlation import plot_correlation
+from TED_data_location import ted_data_path
+
+from list_of_talks import allrating_samples, all_valid_talks, hi_lo_files
+
 from sklearn.cluster import KMeans, DBSCAN
 import sklearn as sl
 import scipy as sp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -31,17 +36,16 @@ import os
 # 12: emotional_range_big5
 
 
-comparator = ts.Sentiment_Comparator(
-    ts.hi_lo_files,     # Compare between hi/lo viewcount files
-    ts.read_bluemix,    # Use bluemix sentiment
-    )
+# Get some sample datapoints just for testing
+comparator = ts.Sentiment_Comparator(hi_lo_files)     
 
-def bluemix_plot1(outfilename = None):
+def bluemix_plot1(outfile = 'bm_plot1.png'):
     '''
     This function plots the progression of average <b>emotion scores</b>
     for 30 highest viewed ted talks and 30 lowest viewed ted talks.
     If you want to save the plots in a file, set the outfilename argument.
     '''
+    outfilename = os.path.join(ted_data_path,'TED_stats/' + outfile)
     avg_ = comparator.calc_group_mean()
     # Plot Group Average
     ts.draw_group_mean_sentiments(avg_, # the average of groups
@@ -52,6 +56,7 @@ def bluemix_plot1(outfilename = None):
         legend_location='lower center',
         outfilename=outfilename
         )
+    print 'File saved in:',outfilename
 
 def bluemix_plot2(outfilename=None):
     '''
