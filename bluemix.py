@@ -1,9 +1,11 @@
 import os
 import re
+import time
 import shutil
 import cPickle as cp
 import numpy as np
 import math
+import glob
 from multiprocessing import Process
 from nltk.tokenize import sent_tokenize
 from bluemix_key import *
@@ -41,17 +43,44 @@ def fetch_partial_annotations(startidx,endidx):
                 or atalk in part_score:
             print 'skipping:',atalk
             continue
-        filename = os.path.join(metafolder,str(atalk)+'.pkl')
-        print filename
-        data = cp.load(open(filename))
-        txt = ' '.join([aline.encode('ascii','ignore') for apara \
-                in data['talk_transcript'] for aline in apara])
-        # remove tags
-        txt = re.sub('\([\w ]*?\)','',txt)
-        response = tone_analyzer.tone(text=txt)
-        print response
-        with open(os.path.join(partfolder,str(atalk)+'.pkl'),'wb') as f:
-            cp.dump(response,f)
+        __part_process__(atalk,metafolder,partfolder)
+
+def __part_process__(atalk,metafolder,partfolder):
+    filename = os.path.join(metafolder,str(atalk)+'.pkl')
+    print filename
+    data = cp.load(open(filename))
+    txt = ' '.join([aline.encode('ascii','ignore') for apara \
+            in data['talk_transcript'] for aline in apara])
+    # remove tags
+    txt = re.sub('\([\w ]*?\)','',txt)
+    response = tone_analyzer.tone(text=txt)
+    print response
+    with open(os.path.join(partfolder,str(atalk)+'.pkl'),'wb') as f:
+        cp.dump(response,f)
+
+
+# Use the bluemix api to extract tones. It takes a list
+def fetch_partial_annotations_by_list(list_of_talks):
+    # Create all paths
+    metafolder = os.path.join(ted_data_path,'TED_meta/')
+    outfolder = os.path.join(ted_data_path,\
+            'TED_feature_bluemix_scores/')
+    partfolder = os.path.join(ted_data_path,'TED_bm_partial/') 
+    if not os.path.exists(partfolder):
+        os.mkdir(partfolder)
+    # List existing full and partial data
+    full_score = [int(afile[:-4]) for afile in \
+        os.listdir(outfolder) if afile.endswith('.pkl')]
+    part_score = [int(afile[:-4]) for afile in \
+        os.listdir(partfolder) if afile.endswith('.pkl')]
+
+    # Start processing
+    for atalk in list_of_talks:
+        if atalk in full_score or atalk in part_score:
+            print 'skipping:',atalk
+            continue
+        __part_process__(atalk,metafolder,partfolder)
+
 
 # segment a list into chunks of 100's
 def segment100(alist):
@@ -114,6 +143,33 @@ def fetch_remaining_annotations(startidx,endidx,
         if atalk in full_score or atalk not in part_score:
             print 'skipping:',atalk
             continue
+        __process_remaining__(atalk,partfolder,outfolder,metafolder)
+
+# Bluemax gives tone only for the first 100 sentences. 
+# This function gets the remaining annotations. It takes a list.
+def fetch_remaining_annotations_by_list(list_of_talks,
+        talksdir='TED_meta/',
+        outdir='TED_feature_bluemix_scores/',
+        partdir='TED_bm_partial/'):
+    # Create all paths
+    metafolder = os.path.join(ted_data_path,talksdir)
+    outfolder = os.path.join(ted_data_path,outdir)
+    partfolder = os.path.join(ted_data_path,partdir) 
+    if not os.path.exists(partfolder):
+        os.mkdir(partfolder)
+    # List existing full and partial data
+    full_score = [int(afile[:-4]) for afile in \
+        os.listdir(outfolder) if afile.endswith('.pkl')]
+    part_score = [int(afile[:-4]) for afile in \
+        os.listdir(partfolder) if afile.endswith('.pkl')]
+
+    for atalk in list_of_talks:
+        if atalk in full_score or atalk not in part_score:
+            print 'skipping:',atalk
+        else:
+            __process_remaining__(atalk,partfolder,outfolder,metafolder)
+
+def __process_remaining__(atalk,partfolder,outfolder,metafolder):
         print atalk
         # Source and destination files
         src = os.path.join(partfolder,str(atalk)+'.pkl')
@@ -131,7 +187,6 @@ def fetch_remaining_annotations(startidx,endidx,
             # Old annotation has all the information. So skip.
             print 'Less than 100 sentences. copying directly',atalk
             shutil.copyfile(src,dst)
-            continue
         else:
             # This is the partial score data
             existingdata = cp.load(open(src))
@@ -141,39 +196,51 @@ def fetch_remaining_annotations(startidx,endidx,
                         ' Marking it and skipping ...'
                 shutil.copyfile(src,os.path.join(outfolder,str(atalk)+\
                         '_no_sentence.pkl'))
-                continue
-            # Processing sentence-wise scores (adding missing scores)
-            old_to = existingdata['sentences_tone'][-1]['input_to']
-            old_sentid = existingdata['sentences_tone'][-1]['sentence_id']
-            # Segment the talk in chunks of 100 sentences
-            segments = segment100(sentences)
-            # Collect annotation for the rest of the talk
-            for asegm in segments[1:]:
-                txt = ' '.join(asegm)
-                result = tone_analyzer.tone(txt)
-                # Update the input_from and input_to fields accordingly
-                try:
-                    output = result['sentences_tone']
-                except KeyError:
-                    # There was only one sentence in txt
-                    output=[{'input_from':0,'input_to':len(txt),'sentence_id':0,'text':txt,\
-                    'tone_categories':result['document_tone']['tone_categories']}]
-
-                for i in range(len(output)):
-                    output[i]['input_from']+=old_to+1
-                    output[i]['input_to']+=old_to+1
-                    output[i]['sentence_id']+=old_sentid+1
-                # Add the new content to existing data
-                existingdata['sentences_tone'].extend(output)
-                # Update old_to and old_sentid to the most recent to value
-                old_to = output[i]['input_to']
-                old_sentid = output[i]['sentence_id']
-            cp.dump(existingdata,open(dst,'wb'))
+            else:
+                # Processing sentence-wise scores (adding missing scores)
+                old_to = existingdata['sentences_tone'][-1]['input_to']
+                old_sentid = existingdata['sentences_tone'][-1]['sentence_id']
+                # Segment the talk in chunks of 100 sentences
+                segments = segment100(sentences)
+                # Collect annotation for the rest of the talk
+                for asegm in segments[1:]:
+                    txt = ' '.join(asegm)
+                    result = tone_analyzer.tone(txt)
+                    # Update the input_from and input_to fields accordingly
+                    try:
+                        output = result['sentences_tone']
+                    except KeyError:
+                        # There was only one sentence in txt
+                        output=[{'input_from':0,'input_to':len(txt),'sentence_id':0,'text':txt,\
+                        'tone_categories':result['document_tone']['tone_categories']}]
+                    for i in range(len(output)):
+                        output[i]['input_from']+=old_to+1
+                        output[i]['input_to']+=old_to+1
+                        output[i]['sentence_id']+=old_sentid+1
+                    # Add the new content to existing data
+                    existingdata['sentences_tone'].extend(output)
+                    # Update old_to and old_sentid to the most recent to value
+                    old_to = output[i]['input_to']
+                    old_sentid = output[i]['sentence_id']
+                cp.dump(existingdata,open(dst,'wb'))
 
 def pipeline(st,en):
     fetch_partial_annotations(st,en)
     fetch_remaining_annotations(st,en)
 
+def process_bluehive():
+    bm_path = os.path.join(ted_data_path,'TED_feature_bluemix_scores/*.pkl')
+    bluemixlist = set([int(item.split('/')[-1].split('.')[0]) for item in glob.glob(bm_path)])
+
+    meta_path = os.path.join(ted_data_path,'TED_meta/*.pkl')
+    metalist = set([int(item.split('/')[-1].split('.')[0]) for item in glob.glob(meta_path)])
+
+    filelist = list(metalist.difference(bluemixlist))
+    id = int(os.environ['SLURM_ARRAY_TASK_ID'])
+    time.sleep(5.*np.random.rand())
+    fetch_partial_annotations_by_list([filelist[id]])
+    time.sleep(5.*np.random.rand())
+    fetch_remaining_annotations_by_list([filelist[id]])
 
 if __name__=='__main__':
     p1 = Process(target=pipeline,args=(1,725))
@@ -184,6 +251,7 @@ if __name__=='__main__':
     p3.start()
     p4 = Process(target=pipeline,args=(2175,np.inf))
     p4.start() 
+
 
 
 
