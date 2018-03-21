@@ -22,7 +22,7 @@ def loaddata(indexfile='./index.csv'):
     dict_input = {'group_1':all_valid_talks[:m/2],
                   'group_2':all_valid_talks[m/2:]}
     # Load into sentiment comparator for all the pre-comps
-    comp = Sentiment_Comparator(dict_input,read_bluemix)
+    comp = Sentiment_Comparator(dict_input)
     scores=[]
     Y=[]
     for atalk in comp.alltalks:

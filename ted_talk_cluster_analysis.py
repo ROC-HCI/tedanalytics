@@ -1,4 +1,5 @@
 import csv
+import os
 import itertools
 import operator as op
 from list_of_talks import all_valid_talks
@@ -131,6 +132,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
                  'informative', 'jaw-dropping', 'unconvincing','Totalviews']
     plt.close('all')
     # s is the index of a bluemix score
+    cluster_means = {}
     for s in range(B):
         # If b_ is specified, just compute one score and skip others
         if b_ and not b_ == s:
@@ -139,6 +141,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
         clust_dict = clust_onescore_stand(X[:,:,s],clusterer,comparator)
         comparator.reform_groups(clust_dict)
         avg = comparator.calc_group_mean()
+        cluster_means[comparator.column_names[s]] = avg
         for aclust in avg:
             if not comparator.column_names[s] in avg_dict:
                 avg_dict[comparator.column_names[s]] = {aclust:avg[aclust][:,s]}
@@ -186,7 +189,8 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
             if akw == 'Totalviews':
                 continue
             # Total number of repeated comparisons
-            paircount = count_n_choose_r(len(ratvals),2)
+            paircount = count_n_choose_r(len(ratvals),2) \
+                if len(ratvals) >=2 else 1.
             # Pair-wise comparison using t-test and effectsize
             for rat1,rat2 in itertools.combinations(ratvals,2):
                 _,pval_t = ttest_ind(ratvals[rat1],ratvals[rat2],\
@@ -214,7 +218,8 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
         if not pvals.keys():
             continue
         else:
-            draw_boxplots(pvals,allvals,s,comparator,outfilename=outfilename)
+            draw_boxplots(pvals,allvals,s,comparator,outfilename=outfilename)         
+    return cluster_means
 
 def draw_boxplots(pvals,allvals,s,comparator,outfilename=None):
     # Draw the box plot for Totalviews first
@@ -230,14 +235,16 @@ def draw_boxplots(pvals,allvals,s,comparator,outfilename=None):
         if not outfilename:
             plt.show()
         else:
-            plt.savefig(outfilename+'boxplt_'+\
-                comparator.column_names[s]+'_'+akw+'.eps')
+            split_fn = os.path.split(outfilename)
+            plt.savefig(os.path.join(split_fn[0],'boxplt_'+\
+                comparator.column_names[s]+'_'+akw+
+                '_'+split_fn[1]))
             plt.close()
 
 def read_index(indexfile):
     # Read the content of the index file
     # content is a dictionary 
-    with open(indexfile) as csvfile:
+    with open(indexfile,'rU') as csvfile:
         reader=csv.DictReader(csvfile,delimiter=',')
         content={}
         vid_idx={}
@@ -275,7 +282,6 @@ def draw_clusters(avg_dict,column_names,fullyaxis=False,\
         plt.legend(bbox_to_anchor=(0., 1.05, 1., 0), loc=3,\
            ncol=5, mode="expand", borderaxespad=0.)
         if outfilename:
-            import os
             split_fn = os.path.split(outfilename)
             plt.savefig(os.path.join(split_fn[0],column_names[i]+\
                 '_'+split_fn[1]))
@@ -345,7 +351,9 @@ def draw_clusters_pretty(avg_dict,comp,csvcontent,vid_idx,
         if not outfilename:
             plt.show()
         else:
-            plt.savefig(outfilename+'clust_'+ascore+'.eps')
+            split_fn = os.path.split(outfilename)
+            plt.savefig(os.path.join(split_fn[0],'clust_'+ascore+\
+                '_'+split_fn[1]))
             plt.close()
 
 def decorate_axis(c,cols,rows,yval,avg_yval,txtlist,legendval,fig,
@@ -374,11 +382,13 @@ def decorate_axis(c,cols,rows,yval,avg_yval,txtlist,legendval,fig,
     txtax.axis('off')
     txtax.patch.set_alpha(0)
     for i,txt in enumerate(txtlist):
+        txt = txt.decode('utf-8')
         txtax.text(0,1 - txth*(i+1),str(i+1)+'. '+txt)
 
 def count_n_choose_r(n,r):
+    if r == 0 or n == r: return 1
+    assert n>r,'n must be greater than r in n_C_r'
     r = min(r, n-r)
-    if r == 0: return 1
-    numer = reduce(op.mul, xrange(n, n-r, -1))
-    denom = reduce(op.mul, xrange(1, r+1))
+    numer = reduce(op.mul, range(n, n-r, -1))
+    denom = reduce(op.mul, range(1, r+1))
     return numer//denom

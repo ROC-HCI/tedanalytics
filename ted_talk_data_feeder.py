@@ -1,8 +1,10 @@
 import os
 import json
 import glob
+import csv
 import cPickle as cp
 import numpy as np
+import scipy as sp
 import ted_talk_makeindex
 import list_of_talks as lst_talks
 from TED_data_location import ted_data_path, wordvec_path
@@ -60,8 +62,7 @@ def get_dep_rating(talk_id):
         alldat.append(adep)
     return alldat,y,ratedict_processed
 
-
-def binarized_ratings():
+def binarized_ratings(firstThresh=50.,secondThresh=50.):
     '''
     Divides the ground truth ratings into two classes for classification.
     Returns the binarized labels, the median values, and the label of each
@@ -69,7 +70,8 @@ def binarized_ratings():
     '''
     y_gt = []
     # Read ratings from all the talks
-    labels = None
+    labels = [label for label in lst_talks.rating_labels \
+        if not label=='total_count']
     for atalk in lst_talks.all_valid_talks:
         y=[]
         for akey in lst_talks.rating_labels:
@@ -80,14 +82,74 @@ def binarized_ratings():
     # Convert into a numpy array
     y_gt = np.array(y_gt)
     # Calculate the median
-    thresh = np.median(y_gt,axis=0)
-    # Binarize
+    thresh1 = sp.percentile(y_gt,firstThresh,axis=0)
+    thresh2 = sp.percentile(y_gt,firstThresh,axis=0)
+    # Binarize in matrix format for speed
     for i in range(np.size(y_gt,axis=1)):
-        y_gt[y_gt[:,i]<=thresh[i],i] = -1
-        y_gt[y_gt[:,i]>thresh[i],i] = 1
-    return {key:val.tolist() for key,val in zip(lst_talks.all_valid_talks,y_gt)}, \
-        thresh,[label for label in lst_talks.rating_labels if not label=='total_count']
+        y_gt[y_gt[:,i]<=thresh1[i],i] = -1
+        y_gt[(thresh1[i]<y_gt[:,i])*(y_gt[:,i]<thresh2[i]),i] = 0
+        y_gt[y_gt[:,i]>thresh2[i],i] = 1
+    # Convert to dictionary for convenience
+    if firstThresh == secondThresh:
+        return {key:val.tolist() for key,val in \
+            zip(lst_talks.all_valid_talks,y_gt)},thresh1,labels
+    else:
+        return {key:val.tolist() for key,val in \
+            zip(lst_talks.all_valid_talks,y_gt)},thresh1,thresh2,labels
 
+def read_openpose_feat(csv_name =
+    'TED_feature_openpose/summary_presenter_openpose_features_0.65.csv'):
+    '''
+    Read the openpose features
+    '''
+    filename = os.path.join(ted_data_path,csv_name)
+    csvreader = csv.DictReader(open(filename,'rU'))
+    X={}
+    alllabels = None
+    for arow in csvreader:
+        # Read the labels for the first time
+        if not alllabels:
+            alllabels = sorted([label for label in arow if not \
+                (label=='root' or label.endswith('_1'))])
+        talkid = int(arow['root'])
+        if talkid in lst_talks.all_valid_talks:
+            X[talkid] = [float(arow[label]) if arow[label]!='nan' else 0. \
+                for label in alllabels]
+    return X, alllabels
+
+def read_openface_feat(csv_name =
+    'TED_feature_openface/summary_presenter_openface_features_0.65_header.csv'):
+    '''
+    Read the openface features
+    '''
+    filename = os.path.join(ted_data_path,csv_name)
+    csvreader = csv.DictReader(open(filename,'rU'))
+    X={}
+    alllabels = None
+    for arow in csvreader:
+        # Read the labels for the first time
+        if not alllabels:
+            alllabels = sorted([label for label in arow if \
+                (label!='root' and \
+                    ('gaze' in label or \
+                        ('AU' in label and \
+                         label.endswith('_r'))))])
+        talkid = int(arow['root'])
+        if talkid in lst_talks.all_valid_talks:
+            X[talkid] = [float(arow[label]) if arow[label]!='nan' else 0. \
+                for label in alllabels]
+    return X,alllabels
+
+def concat_features(X1, label1, X2, label2):
+    '''
+    Concatenate two feature dictionaries and corresponding labels
+    '''
+    alllabels = label1+label2
+    commontalks = list(set(X1.keys()).intersection(set(X2.keys())))
+    X = {}
+    for atalk in commontalks:
+        X[atalk] = X1[atalk]+X2[atalk]
+    return X
 
 def read_dep_pos_vocab():
     '''
