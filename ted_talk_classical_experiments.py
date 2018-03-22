@@ -467,7 +467,7 @@ def clusters_pretty_draw(X,comp,outfilename='TED_stats/draw_clusters_pretty.png'
 #                 clust_avg[aclust] - 
 
 
-
+# TODO: Try performing clustering without standardization
 def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png'):
     '''
     Similar to clusters_pretty_draw, but it also computes box plots of the
@@ -498,7 +498,7 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png'):
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file
     
-def classify_multimodal(classifier='LinearSVM',nb_tr_iter=10):
+def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
     '''
     Classify between groups of High ratings and low ratings using
     LinearSVM, SVM_rbf and logistic regression. The classifier
@@ -510,17 +510,20 @@ def classify_multimodal(classifier='LinearSVM',nb_tr_iter=10):
     tp = ted_talk_prediction module
     Note: loaddata is a slow function
     '''
+    print 'Reading Features ...',
     # Get body lanugage feature
     X,label = ttdf.read_openpose_feat()
     # Add facial features
     X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
+    # Add sentiment features
+    X,label = ttdf.concat_features(X,label,*ttdf.read_sentiment_feat(X.keys()))
+    # Add Prosody features
+    # Add Lexical features
+    # Add Storytelling (clusters) features
+    print 'Complete'
 
-    
+    tridx,tstidx = ttdf.split_train_test(X.keys())
     Y,_,ylabels = ttdf.binarized_ratings()
-    tridx,tstidx = ttdf.split_train_test()
-    # Filter training and testidixes to only the available data
-    tridx = [idx for idx in tridx if idx in X]
-    tstidx = [idx for idx in tstidx if idx in X]
 
     for i,kw in enumerate(ylabels):
         print
@@ -582,10 +585,22 @@ def classify_multimodal(classifier='LinearSVM',nb_tr_iter=10):
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
                 'ROC of SVM_RBF on Test Data for '+kw)
+        elif classifier == 'logistic_l1':
+            clf = sl.linear_model.LogisticRegression(penalty='l1')
+            # Train with training data
+            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
+                    {'C':sp.stats.expon(scale=1)},
+                    nb_iter=nb_tr_iter,datname=kw)
+            # Evaluate with test data
+            print 'Report on Test Data'
+            print '-----------------------'                 
+            # Evaluate with test data
+            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
+                'ROC of SVM_RBF on Test Data for '+kw)
 
 ####### Methods below this line are not ready for new code structure #############
 
-def classify_old(scores,Y,classifier='LinearSVM'):
+def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
     '''
     Classify between groups of High ratings and low ratings using
     Two different types of SVM LinearSVM or SVM_rbf. The classifier
@@ -618,7 +633,7 @@ def classify_old(scores,Y,classifier='LinearSVM'):
             clf = sl.svm.LinearSVC()
             # Train with training data
             clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,\
-                    {'C':sp.stats.expon(scale=5.)},nb_iter=100,\
+                    {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
                     datname = kw+'_LibSVM')
             # Evaluate with test data
             print 'Report on Test Data'
@@ -632,7 +647,7 @@ def classify_old(scores,Y,classifier='LinearSVM'):
                 clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
                     {'C':sp.stats.expon(scale=25),
                     'gamma':sp.stats.expon(scale=0.05)},
-                    nb_iter=100,datname=kw)
+                    nb_iter=nb_tr_iter,datname=kw)
                 print 'Number of SV:',clf_trained.n_support_
             except ImportError:
                 raise
@@ -651,7 +666,7 @@ def classify_old(scores,Y,classifier='LinearSVM'):
             # Train with training data
             clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
                     {'C':sp.stats.expon(scale=1)},
-                    nb_iter=100,datname=kw)
+                    nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
             print 'Report on Test Data'
             print '-----------------------'                 

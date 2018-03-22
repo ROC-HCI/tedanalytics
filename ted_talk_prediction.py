@@ -38,66 +38,47 @@ def loaddata(indexfile='./index.csv'):
         Y.append(temp)
     return np.array(scores),np.array(Y),kwlist
 
-def feat_sumstat(scores):
-    '''
-    Calculate the summary statistics of the scores such as min, max, 
-    average, standard deviation etc.    
-    Take minimum of the scores
-    '''
-    X = np.min(scores,axis=1)
-    nkw = [akw+'_min' for akw in kwlist]
-    # Concat maxmimum of the scores
-    X = np.concatenate((X,np.max(scores,axis=1)),axis=1)
-    nkw+= [akw+'_max' for akw in kwlist]
-    # Concat average of the scores 
-    X = np.concatenate((X,np.mean(scores,axis=1)),axis=1)
-    nkw+= [akw+'_avg' for akw in kwlist]
-    # Concat standard deviation of the scores 
-    X = np.concatenate((X,np.std(scores,axis=1)),axis=1)
-    nkw+= [akw+'_std' for akw in kwlist]
-    return X, nkw
+# def traintest_idx(N,testsize=0.3):
+#     '''
+#     Get the index of training and test split. 
+#     N is the length of the dataset (sample size)
+#     '''
+#     testidx = np.random.rand(int(N*testsize))*N
+#     testidx = testidx.astype(int).tolist()
+#     trainidx = [i for i in xrange(N) if not i in testidx]
+#     return trainidx,testidx
 
-def traintest_idx(N,testsize=0.3):
-    '''
-    Get the index of training and test split. 
-    N is the length of the dataset (sample size)
-    '''
-    testidx = np.random.rand(int(N*testsize))*N
-    testidx = testidx.astype(int).tolist()
-    trainidx = [i for i in xrange(N) if not i in testidx]
-    return trainidx,testidx
+# def discretizeY(Y,col,firstThresh=33.3333,secondThresh=66.6666):
+#     '''
+#     Discretize and returns and specific column of Y. The strategy is:
+#     to keep the data with score <=33rd percentile be the "low" group,
+#     score >=66th percentile be the "high" group, and the middle be the
+#     "medium" group.
+#     '''
+#     y = Y[:,col]
+#     if kwlist[col] == 'Totalviews':
+#         y=np.log(y)
+#     lowthresh = sp.percentile(y,firstThresh)
+#     hithresh = sp.percentile(y,secondThresh)
+#     y[y<=lowthresh] = -1    # Low group
+#     y[y>=hithresh] = 1      # High group
+#     y[(y>lowthresh)*(y<hithresh)] = 0   # Medium group
+#     return y
 
-def discretizeY(Y,col,firstThresh=33.3333,secondThresh=66.6666):
-    '''
-    Discretize and returns and specific column of Y. The strategy is:
-    to keep the data with score <=33rd percentile be the "low" group,
-    score >=66th percentile be the "high" group, and the middle be the
-    "medium" group.
-    '''
-    y = Y[:,col]
-    if kwlist[col] == 'Totalviews':
-        y=np.log(y)
-    lowthresh = sp.percentile(y,firstThresh)
-    hithresh = sp.percentile(y,secondThresh)
-    y[y<=lowthresh] = -1    # Low group
-    y[y>=hithresh] = 1      # High group
-    y[(y>lowthresh)*(y<hithresh)] = 0   # Medium group
-    return y
-
-def binarize(X,y):
-    '''
-    Keeps only the good and bad parts in the data. Drops the medium part.
-    But if there is only two part, then just repair the labels
-    '''
-    unqy = np.unique(y)
-    if len(unqy)==3:
-        idxmed = y!=0
-        return X[idxmed,:],y[idxmed]
-    elif len(unqy)==2 and 0 in unqy and -1 in unqy:
-        y[y==0]=1
-        return X,y
-    else:
-        raise IOError
+# def binarize(X,y):
+#     '''
+#     Keeps only the good and bad parts in the data. Drops the medium part.
+#     But if there is only two part, then just repair the labels
+#     '''
+#     unqy = np.unique(y)
+#     if len(unqy)==3:
+#         idxmed = y!=0
+#         return X[idxmed,:],y[idxmed]
+#     elif len(unqy)==2 and 0 in unqy and -1 in unqy:
+#         y[y==0]=1
+#         return X,y
+#     else:
+#         raise IOError
     
 
 def classifier_eval(clf_trained,X_test,y_test,use_proba=True,

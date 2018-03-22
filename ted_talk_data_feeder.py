@@ -7,19 +7,20 @@ import numpy as np
 import scipy as sp
 import ted_talk_makeindex
 import list_of_talks as lst_talks
+import ted_talk_sentiment as ts
 from TED_data_location import ted_data_path, wordvec_path
 
 import torch
 import torch.autograd as autograd
 
-def split_train_test(train_ratio=0.7):
+def split_train_test(train_ratio=0.7,talklist=lst_talks.all_valid_talks):
     '''
     Split the list of valid talk id's in training and test sets.
     '''
-    m = len(lst_talks.all_valid_talks)
-    train = np.random.choice(lst_talks.all_valid_talks,int(train_ratio*m),\
+    m = len(talklist)
+    train = np.random.choice(talklist,int(train_ratio*float(m)),\
         replace=False).tolist()
-    test = list(set(lst_talks.all_valid_talks) - set(train))
+    test = list(set(talklist) - set(train))
     return train,test
 
 def generate_dep_tag(talk_id,dep_type='recur',tag_type='{LG}'):
@@ -105,17 +106,17 @@ def read_openpose_feat(csv_name =
     filename = os.path.join(ted_data_path,csv_name)
     csvreader = csv.DictReader(open(filename,'rU'))
     X={}
-    alllabels = None
+    labels = None
     for arow in csvreader:
         # Read the labels for the first time
-        if not alllabels:
-            alllabels = sorted([label for label in arow if not \
+        if not labels:
+            labels = sorted([label for label in arow if not \
                 (label=='root' or label.endswith('_1'))])
         talkid = int(arow['root'])
         if talkid in lst_talks.all_valid_talks:
             X[talkid] = [float(arow[label]) if arow[label]!='nan' else 0. \
-                for label in alllabels]
-    return X, alllabels
+                for label in labels]
+    return X, labels
 
 def read_openface_feat(csv_name =
     'TED_feature_openface/summary_presenter_openface_features_0.65_header.csv'):
@@ -125,11 +126,11 @@ def read_openface_feat(csv_name =
     filename = os.path.join(ted_data_path,csv_name)
     csvreader = csv.DictReader(open(filename,'rU'))
     X={}
-    alllabels = None
+    labels = None
     for arow in csvreader:
         # Read the labels for the first time
-        if not alllabels:
-            alllabels = sorted([label for label in arow if \
+        if not labels:
+            labels = sorted([label for label in arow if \
                 (label!='root' and \
                     ('gaze' in label or \
                         ('AU' in label and \
@@ -137,19 +138,49 @@ def read_openface_feat(csv_name =
         talkid = int(arow['root'])
         if talkid in lst_talks.all_valid_talks:
             X[talkid] = [float(arow[label]) if arow[label]!='nan' else 0. \
-                for label in alllabels]
-    return X,alllabels
+                for label in labels]
+    return X,labels
+
+def read_sentiment_feat(talklist=lst_talks.all_valid_talks):
+    '''
+    Read the summary statistics for narrative trajectory features
+    '''
+    comp = ts.Sentiment_Comparator({'all_talks':talklist})
+    scorelist = comp.sentiments_interp.values()
+    talklist = comp.sentiments_interp.keys()
+    X,labels = __compute_summary__(scorelist,comp.column_names)
+    # Convert to dictionary
+    X = {akey:vals for akey,vals in zip(talklist,X)}
+    return X,labels
+
+def __compute_summary__(scores,col_names):
+    '''
+    Calculate the summary statistics of the scores such as min, max, 
+    average, standard deviation etc.
+    '''
+    X = np.min(scores,axis=1)
+    labels = [col+'_min' for col in col_names]
+    # Concat maxmimum of the scores
+    X = np.concatenate((X,np.max(scores,axis=1)),axis=1)
+    labels+= [col+'_max' for col in col_names]
+    # Concat average of the scores 
+    X = np.concatenate((X,np.mean(scores,axis=1)),axis=1)
+    labels+= [col+'_avg' for col in col_names]
+    # Concat standard deviation of the scores 
+    X = np.concatenate((X,np.std(scores,axis=1)),axis=1)
+    labels+= [col+'_std' for col in col_names]
+    return X.tolist(), labels
 
 def concat_features(X1, label1, X2, label2):
     '''
     Concatenate two feature dictionaries and corresponding labels
     '''
-    alllabels = label1+label2
+    labels = label1+label2
     commontalks = list(set(X1.keys()).intersection(set(X2.keys())))
     X = {}
     for atalk in commontalks:
         X[atalk] = X1[atalk]+X2[atalk]
-    return X,alllabels
+    return X,labels
 
 def read_dep_pos_vocab():
     '''
