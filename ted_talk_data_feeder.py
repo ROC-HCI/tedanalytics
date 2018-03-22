@@ -149,7 +149,7 @@ def concat_features(X1, label1, X2, label2):
     X = {}
     for atalk in commontalks:
         X[atalk] = X1[atalk]+X2[atalk]
-    return X
+    return X,alllabels
 
 def read_dep_pos_vocab():
     '''

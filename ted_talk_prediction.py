@@ -1,15 +1,16 @@
-from list_of_talks import all_valid_talks
-from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
-import ted_talk_cluster_analysis as tca
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import os
 import numpy as np
 import scipy as sp
 import sklearn as sl
 import sklearn.metrics as met
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
+from list_of_talks import all_valid_talks
+from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
+from TED_data_location import ted_data_path
+import ted_talk_cluster_analysis as tca
 
 kwlist = ['beautiful', 'ingenious', 'fascinating',
             'obnoxious', 'confusing', 'funny', 'inspiring',
@@ -100,7 +101,7 @@ def binarize(X,y):
     
 
 def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
-        ROCTitle=None,outfilename='./plots/'):
+        ROCTitle=None,outfilename='TED_stats/classifier_results.png'):
     y_pred = clf_trained.predict(X_test)
     print sl.metrics.classification_report(y_test,y_pred)
     print 'Accuracy:',sl.metrics.accuracy_score(y_test,y_pred)
@@ -130,7 +131,9 @@ def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
         if not outfilename:
             plt.show()
         else:
-            plt.savefig(outfilename+ROCTitle+'.eps')
+            outfilename = os.path.join(ted_data_path,outfilename)
+            split_fn = os.path.split(outfilename)
+            plt.savefig(os.path.join(split_fn[0],ROCTitle+'_'+split_fn[1]))
             plt.close()
         
 def regressor_eval(regressor_trained,X_test,y_test):

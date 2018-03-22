@@ -1,4 +1,5 @@
 import ted_talk_sentiment as ts
+import ted_talk_data_feeder as ttdf
 import ted_talk_cluster_analysis as tca
 import ted_talk_prediction as tp
 from ted_talk_statistic import plot_statistics
@@ -497,11 +498,94 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png'):
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file
     
+def classify_multimodal(classifier='LinearSVM',nb_tr_iter=10):
+    '''
+    Classify between groups of High ratings and low ratings using
+    LinearSVM, SVM_rbf and logistic regression. The classifier
+    argument can take these two values.
+    This function trains the classifiers and evaluates their performances.
 
+    Use the following command to get the initial arguments:
+    scores,Y,_ = tp.loaddata()
+    tp = ted_talk_prediction module
+    Note: loaddata is a slow function
+    '''
+    # Get body lanugage feature
+    X,label = ttdf.read_openpose_feat()
+    # Add facial features
+    X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
+
+    
+    Y,_,ylabels = ttdf.binarized_ratings()
+    tridx,tstidx = ttdf.split_train_test()
+    # Filter training and testidixes to only the available data
+    tridx = [idx for idx in tridx if idx in X]
+    tstidx = [idx for idx in tstidx if idx in X]
+
+    for i,kw in enumerate(ylabels):
+        print
+        print
+        print kw
+        print '================='
+        print 'Predictor:',classifier
+        # y = tp.discretizeY(Y,i)
+        # X_bin,y_bin = tp.binarize(X,y)
+        # m = len(y_bin)
+        
+        # Split in training and test data
+        trainX = [X[atalk] for atalk in tridx]
+        trainY = [Y[atalk][i] for atalk in tridx]
+        testX = [X[atalk] for atalk in tstidx]
+        testY = [Y[atalk][i] for atalk in tstidx]
+  
+        # Classifier selection
+        if classifier == 'LinearSVM':
+            clf = sl.svm.LinearSVC()
+            # Train with training data
+            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,\
+                    {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
+                    datname = kw+'_LibSVM')
+            # Evaluate with test data
+            print 'Report on Test Data'
+            print '-----------------------'            
+            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=kw)
+        elif classifier == 'SVM_rbf':
+            clf = sl.svm.SVC()
+            # Train with training data
+            try:
+                clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
+                    {'C':sp.stats.expon(scale=25),
+                    'gamma':sp.stats.expon(scale=0.05)},
+                    nb_iter=nb_tr_iter,datname=kw)
+                print 'Number of SV:',clf_trained.n_support_
+            except ImportError:
+                raise
+            except:
+                print 'Data is badly scaled for',kw
+                print 'skiping'
+                continue
+            # Evaluate with test data
+            print 'Report on Test Data'
+            print '-----------------------'                 
+            # Evaluate with test data
+            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
+                'ROC of SVM_RBF on Test Data for '+kw)
+        elif classifier == 'logistic_regression':
+            clf = sl.linear_model.LogisticRegression()
+            # Train with training data
+            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
+                    {'C':sp.stats.expon(scale=1)},
+                    nb_iter=nb_tr_iter,datname=kw)
+            # Evaluate with test data
+            print 'Report on Test Data'
+            print '-----------------------'                 
+            # Evaluate with test data
+            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
+                'ROC of SVM_RBF on Test Data for '+kw)
 
 ####### Methods below this line are not ready for new code structure #############
 
-def classify_Good_Bad(scores,Y,classifier='LinearSVM'):
+def classify_old(scores,Y,classifier='LinearSVM'):
     '''
     Classify between groups of High ratings and low ratings using
     Two different types of SVM LinearSVM or SVM_rbf. The classifier
