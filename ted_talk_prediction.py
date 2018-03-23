@@ -7,7 +7,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from list_of_talks import all_valid_talks
 from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
 from TED_data_location import ted_data_path
 import ted_talk_cluster_analysis as tca
@@ -16,27 +15,6 @@ kwlist = ['beautiful', 'ingenious', 'fascinating',
             'obnoxious', 'confusing', 'funny', 'inspiring',
              'courageous', 'ok', 'persuasive', 'longwinded', 
              'informative', 'jaw-dropping', 'unconvincing','Totalviews']
-
-def loaddata(indexfile='./index.csv'):
-    csv_,vid = tca.read_index(indexfile)
-    m = len(all_valid_talks)
-    dict_input = {'group_1':all_valid_talks[:m/2],
-                  'group_2':all_valid_talks[m/2:]}
-    # Load into sentiment comparator for all the pre-comps
-    comp = Sentiment_Comparator(dict_input)
-    scores=[]
-    Y=[]
-    for atalk in comp.alltalks:
-        scores.append(comp.sentiments_interp[atalk])
-        temp = []
-        for akw in kwlist:
-            if akw == 'Totalviews':
-                temp.append(int(csv_[akw][vid[atalk]]))
-            else:
-                temp.append(float(csv_[akw][vid[atalk]])/\
-                    float(csv_['total_count'][vid[atalk]])*100.)
-        Y.append(temp)
-    return np.array(scores),np.array(Y),kwlist
 
 # def traintest_idx(N,testsize=0.3):
 #     '''

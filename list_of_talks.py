@@ -16,7 +16,9 @@ It offers the following global variables:
 '''
 
 # Name of all ratings
-rating_labels = sorted(['beautiful','funny','ingenious','ok','fascinating','total_count','persuasive','inspiring','longwinded','informative','jaw-dropping','obnoxious','confusing','courageous','unconvincing'])
+rating_labels = sorted(['beautiful','funny','ingenious','ok','fascinating',
+  'total_count','persuasive','inspiring','longwinded','informative',
+  'jaw-dropping','obnoxious','confusing','courageous','unconvincing'])
 
 # This is a hand curated test set of 150 datapoints. It was randomly sampled
 # from the dataset with a constraint that there is at least 2 ratings for each
@@ -47,20 +49,21 @@ for arow in reader:
     if arow['Is_a_Talk?']=='Yes':
         atalk = int(arow['Video_ID'])
         # Skip the talks in the test set. This data is hidden for the final result.
-        if atalk in test_set:
+        if test_set and atalk in test_set:
             continue
         all_valid_talks.append(atalk)
         all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}
-test_set=list(test_set)
+if test_set:
+    test_set=list(test_set)
 
 # A small list of files 
 hi_lo_files = {
-            'High_View_Talks':[66,1569,848,549,229,96,618,1647,2034,1377,685,
-                1246,1344,97,741,206,1821,1815,2405,2399,310,453,652,92,2458,
-                2217,1733,1764,1100,70],
-            'Low_View_Talks':[524,239,1359,313,318,1263,1341,1452,674,394,
-                1294,339,1445,402,500,427,962,268,679,925,1373,403,439,220,
-                675,379,345,1466,673,1332]}
+  'High_View_Talks':[66,1569,848,549,229,96,618,1647,2034,1377,685,
+      1246,1344,97,741,206,1821,1815,2405,2399,310,453,652,92,2458,
+      2217,1733,1764,1100,70],
+  'Low_View_Talks':[524,239,1359,313,318,1263,1341,1452,674,394,
+      1294,339,1445,402,500,427,962,268,679,925,1373,403,439,220,
+      675,379,345,1466,673,1332]}
 
 allrating_samples = \
 [

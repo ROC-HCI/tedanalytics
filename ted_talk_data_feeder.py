@@ -153,10 +153,38 @@ def read_sentiment_feat(talklist=lst_talks.all_valid_talks):
     X = {akey:vals for akey,vals in zip(talklist,X)}
     return X,labels
 
+def read_prosody_feat(talklist=lst_talks.all_valid_talks,
+    foldername = 'TED_feature_prosody/full_video'):
+    '''
+    Reads the prosody features for each video
+    '''
+    pathname = os.path.join(ted_data_path,foldername)
+    X={}
+    labels = None
+    for atalk in talklist:
+        pklname = os.path.join(pathname,str(atalk)+'.pkl')
+        if not os.path.exists(pklname):
+            print 'Not found',atalk
+            continue
+        data = cp.load(open(pklname))
+        if not labels:
+            labels = ['intensity_'+akey for akey in data['intensity'].keys()]+\
+                ['pitch_'+akey for akey in data['pitch'].keys()]+\
+                ['intensity_'+akey+'_'+str(i) for akey in \
+                    data['intensity'].keys() for i in range(5)]
+        X[atalk] = data['intensity'].values()+\
+            data['pitch'].values()+\
+            np.concatenate(data['formant'].values(),axis=0).tolist()
+
+    return X, labels
+
+
 def __compute_summary__(scores,col_names):
     '''
     Calculate the summary statistics of the scores such as min, max, 
     average, standard deviation etc.
+    Dimension of scores: 
+    Number of Talks x interp Talk length (100) x score type (13)
     '''
     X = np.min(scores,axis=1)
     labels = [col+'_min' for col in col_names]

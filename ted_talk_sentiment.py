@@ -13,7 +13,6 @@ from nltk.tokenize import sent_tokenize
 from bluemix import parse_sentence_tone
 
 from TED_data_location import ted_data_path
-from list_of_talks import hi_lo_files
 
 ############################### Generic Readers ##############################
 '''
@@ -399,24 +398,3 @@ def namefix(astr):
     astr=astr.replace('emotion_tone_','').replace('language_tone_','')
     astr=astr.replace('social_tone_','').replace('_big5','')
     return astr
-
-############################################################################
-
-def main():
-    comparator = Sentiment_Comparator(hi_lo_files)
-    grp_avg = comparator.calc_group_mean()
-    outfilepath = os.path.join(ted_data_path,'TED_stats/')
-    outfilename = os.path.join(outfilepath,'Ensemble_Avg_Sent.eps')
-    draw_group_mean_sentiments(grp_avg,
-        comparator.column_names,outfilename=outfilename)
-    outfilename = os.path.join(outfilepath,'Time_Avg_Sent.eps')
-    time_avg,pvals = comparator.calc_time_mean()
-    draw_time_mean_sentiments(time_avg,
-        comparator.column_names,
-        pvals,outfilename=outfilename)
-    
-
-
-
-if __name__ == '__main__':
-    main()

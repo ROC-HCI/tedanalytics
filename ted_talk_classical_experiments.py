@@ -1,3 +1,15 @@
+import os
+import numpy as np
+import scipy as sp
+import sklearn as sl
+from sklearn.preprocessing import StandardScaler
+import cPickle as cp
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans, DBSCAN, SpectralClustering
+
+
 import ted_talk_sentiment as ts
 import ted_talk_data_feeder as ttdf
 import ted_talk_cluster_analysis as tca
@@ -5,17 +17,9 @@ import ted_talk_prediction as tp
 from ted_talk_statistic import plot_statistics
 from ted_talk_statistic_correlation import plot_correlation
 from TED_data_location import ted_data_path
-
 from list_of_talks import allrating_samples, all_valid_talks, hi_lo_files
 
-from sklearn.cluster import KMeans, DBSCAN, SpectralClustering
-import sklearn as sl
-import scipy as sp
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import numpy as np
-import os
+
 
 # This python file enlists many experiments we have done.
 # It can also be used as sample usage of the code repository such as
@@ -38,7 +42,26 @@ import os
 
 
 # Get some sample datapoints just for testing
-comparator = ts.Sentiment_Comparator(hi_lo_files)     
+comparator = ts.Sentiment_Comparator(hi_lo_files) 
+# Prepare the data loader
+def __loaddata__(indexfile='./index.csv'):
+    csv_,vid = tca.read_index(indexfile)
+    dict_input = {'all_talks':all_valid_talks}
+    # Load into sentiment comparator for all the pre-comps
+    comp = Sentiment_Comparator(dict_input)
+    scores=[]
+    Y=[]
+    for atalk in comp.alltalks:
+        scores.append(comp.sentiments_interp[atalk])
+        temp = []
+        for akw in kwlist:
+            if akw == 'Totalviews':
+                temp.append(int(csv_[akw][vid[atalk]]))
+            else:
+                temp.append(float(csv_[akw][vid[atalk]])/\
+                    float(csv_['total_count'][vid[atalk]])*100.)
+        Y.append(temp)
+    return np.array(scores),np.array(Y),kwlist,comp    
 
 def bluemix_plot1(outfile = 'bm_plot1.png'):
     '''
@@ -133,7 +156,7 @@ def bluemix_plot5(outfilename='hivi_lovi.png'):
     This function plots the time averages for the 30 highest viewed
     and 30 lowest viewed ted talks. In addition, it performs T-tests
     among the hi-view and lo-view groups. By default, the output is saved
-    in the './plots/hivi_lovi.png' file. But if you want to see it
+    in the 'outfilename' file. But if you want to see it
     on an interactive window, just set outfilename=None
     '''
     if outfilename:
@@ -432,9 +455,9 @@ def clusters_pretty_draw(X,comp,outfilename='TED_stats/draw_clusters_pretty.png'
 
     Note: before you call this function, you should get the arguments
     (X and comp) using the following command: 
-    X,comp = tca.load_all_scores()
+    X,_,_,comp = __loaddata__()
     tca is the ted_talk_cluster_analysis module
-    load_all_scores is a slow function      
+    __loaddata__ is a slow function      
     '''
     # Try Using any other clustering from sklearn.cluster
     km = DBSCAN(eps = 6.5, min_samples = 5)
@@ -445,30 +468,10 @@ def clusters_pretty_draw(X,comp,outfilename='TED_stats/draw_clusters_pretty.png'
     tca.draw_clusters_pretty(avg_dict,comp,csvcontent,csv_vid_idx,
         outfilename=outfilename)
     print 'Group of out files:',outfilename
-
-# def decide_best_cluster_parameters(X,comp,paramlist):
-#     '''
-#     Given a list of cluster parameters, it attempts to determine the best
-#     parameters by sorting them from best to worst. The quality is measured
-#     by computing the average (per cluster) distance of the interpolated 
-#     scores from the group means.
-#     '''
-#     quality={}
-#     for params in paramlist:
-#         N,M,B = X.shape
-#         avg_dict = {}
-#         clusterer = DBSCAN(**params)
-#         # For every bluemix score
-#         for s in range(B):
-#             clust_dict = clust_onescore_stand(X[:,:,s],clusterer,comp,True)
-#             comp.reform_groups(clust_dict)
-#             clust_avg = comp.calc_group_mean()
-#             for aclust in clust_avg:
-#                 clust_avg[aclust] - 
-
-
-# TODO: Try performing clustering without standardization
-def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png'):
+        
+def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png',
+    out_clustermeans = 'misc/cluster_params.pkl',
+    dbscan_params={'eps':7.55, 'min_samples':15}):
     '''
     Similar to clusters_pretty_draw, but it also computes box plots of the
     ratings in order to evaluate the quality of the clusters in terms of
@@ -482,19 +485,21 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png'):
 
     Note: before you call this function, you should get the arguments
     (X and comp) using the following command: 
-    X,comp = tca.load_all_scores()
+    X,_,_,comp = __loaddata__()
     tca is the ted_talk_cluster_analysis module
-    load_all_scores is a slow function     
+    __loaddata__ is a slow function     
     '''
     # Try Using any other clustering from sklearn.cluster
-    km = DBSCAN(eps=7.75, min_samples = 15)
+    km = DBSCAN(**dbscan_params)
     # km = SpectralClustering(n_clusters = 7, eigen_solver = 'arpack')
     csvcontent,csv_vid_idx = tca.read_index(indexfile = './index.csv')
     outfilename = os.path.join(ted_data_path,outfilename)
-    cluster_means = tca.evaluate_clust_separate_stand(X,km,comp,csvcontent,
-        csv_vid_idx,outfilename=outfilename)
-    cluster_mean_file = os.path.join(ted_data_path,'misc/cluster_means.pkl')
-    cp.dump(cluster_means,open(cluster_mean_file,'wb'))
+    cluster_means,normalizer_params = tca.evaluate_clust_separate_stand(X,
+        km,comp,csvcontent,csv_vid_idx,outfilename=outfilename)
+    cluster_mean_file = os.path.join(ted_data_path,out_clustermeans)
+    dbscan_params.update({'cluster_means':cluster_means,
+        'normalizer_params':normalizer_params})
+    cp.dump(dbscan_params,open(cluster_mean_file,'wb'))
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file
     
@@ -506,11 +511,12 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
     This function trains the classifiers and evaluates their performances.
 
     Use the following command to get the initial arguments:
-    scores,Y,_ = tp.loaddata()
+    scores,Y,_,_ = __loaddata__()
     tp = ted_talk_prediction module
     Note: loaddata is a slow function
     '''
-    print 'Reading Features ...',
+    print 'Reading Features ...'
+    # TODO: Make these independently selectable
     # Get body lanugage feature
     X,label = ttdf.read_openpose_feat()
     # Add facial features
@@ -518,11 +524,22 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
     # Add sentiment features
     X,label = ttdf.concat_features(X,label,*ttdf.read_sentiment_feat(X.keys()))
     # Add Prosody features
+    X,label = ttdf.concat_features(X,label,*ttdf.read_prosody_feat(X.keys()))
     # Add Lexical features
-    # Add Storytelling (clusters) features
+    # Add Storytelling (clusters) features based on training data
     print 'Complete'
 
-    tridx,tstidx = ttdf.split_train_test(X.keys())
+    # Train-Test set preparation
+    tridx,tstidx = ttdf.split_train_test(talklist=X.keys())
+    trainX = [X[atalk] for atalk in tridx]
+    testX = [X[atalk] for atalk in tstidx]
+    # Feature normalization
+    normalizer = StandardScaler().fit(trainX)
+    trainX = normalizer.transform(trainX)
+    testX = normalizer.transform(testX)
+    # TODO: Save all classifier parameters (model, normalizer)
+
+    # TODO: Fix for multi-threshold
     Y,_,ylabels = ttdf.binarized_ratings()
 
     for i,kw in enumerate(ylabels):
@@ -536,9 +553,8 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
         # m = len(y_bin)
         
         # Split in training and test data
-        trainX = [X[atalk] for atalk in tridx]
+        
         trainY = [Y[atalk][i] for atalk in tridx]
-        testX = [X[atalk] for atalk in tstidx]
         testY = [Y[atalk][i] for atalk in tstidx]
   
         # Classifier selection
@@ -549,7 +565,7 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
                     {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
                     datname = kw+'_LibSVM')
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'            
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=kw)
         elif classifier == 'SVM_rbf':
@@ -568,11 +584,11 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
                 print 'skiping'
                 continue
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Test Data for '+kw)
+                'ROC of SVM_RBF on Dev Data for '+kw)
         elif classifier == 'logistic_regression':
             clf = sl.linear_model.LogisticRegression()
             # Train with training data
@@ -580,11 +596,11 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
                     {'C':sp.stats.expon(scale=1)},
                     nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Test Data for '+kw)
+                'ROC of SVM_RBF on Dev Data for '+kw)
         elif classifier == 'logistic_l1':
             clf = sl.linear_model.LogisticRegression(penalty='l1')
             # Train with training data
@@ -592,11 +608,11 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
                     {'C':sp.stats.expon(scale=1)},
                     nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Test Data for '+kw)
+                'ROC of SVM_RBF on Dev Data for '+kw)
 
 ####### Methods below this line are not ready for new code structure #############
 
@@ -608,7 +624,7 @@ def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
     This function trains the classifiers and evaluates their performances.
 
     Use the following command to get the initial arguments:
-    scores,Y,_ = tp.loaddata()
+    scores,Y,_,_ = __loaddata__()
     tp = ted_talk_prediction module
     Note: loaddata is a slow function
     '''
@@ -636,10 +652,10 @@ def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
                     {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
                     datname = kw+'_LibSVM')
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'            
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of LinearSVM on Test Data for '+kw)
+                'ROC of LinearSVM on Dev Data for '+kw)
         elif classifier == 'SVM_rbf':
             clf = sl.svm.SVC()
             # Train with training data
@@ -656,11 +672,11 @@ def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
                 print 'skiping'
                 continue
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Test Data for '+kw)
+                'ROC of SVM_RBF on Dev Data for '+kw)
         elif classifier == 'logit':
             clf = sl.linear_model.LogisticRegression()
             # Train with training data
@@ -668,11 +684,11 @@ def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
                     {'C':sp.stats.expon(scale=1)},
                     nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
-            print 'Report on Test Data'
+            print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
             tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Test Data for '+kw)
+                'ROC of SVM_RBF on Dev Data for '+kw)
 
 
 def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
@@ -681,7 +697,7 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
     the regressors, it also evaluates them.
 
     Use the following command to get the initial arguments:
-    scores,Y,_ = tp.loaddata()
+    scores,Y,_,_ = __loaddata__()
     tp = ted_talk_prediction module
     Note: loaddata is a slow function
     '''    
@@ -707,7 +723,7 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
                 rgrs,{'alpha':sp.stats.expon(scale=1.)},
                 score_func=cv_score)
             # Evaluate with test data
-            print 'Report on Test Data:'
+            print 'Report on Dev Data:'
             print '-----------------------'             
             tp.regressor_eval(rgrs_trained,testX,testY)
         elif regressor == 'SVR':
@@ -718,7 +734,7 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
                 rgrs,{'C':sp.stats.expon(scale=10)},
                 score_func=cv_score)
             # Evaluate with test data
-            print 'Report on Test Data:'
+            print 'Report on Dev Data:'
             print '-----------------------'             
             tp.regressor_eval(rgrs_trained,testX,testY)
         elif regressor == 'gp':
@@ -730,7 +746,7 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
             print '-----------------------'             
             tp.regressor_eval(rgrs,testX,testY)
             # Evaluate with test data
-            print 'Report on Test Data:'
+            print 'Report on Dev Data:'
             print '-----------------------'             
             tp.regressor_eval(rgrs,testX,testY)
         elif regressor == 'lasso':
@@ -743,7 +759,7 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
             rgrs_trained,score = tp.train_with_CV(trainX,trainY,
                 rgrs,{'alpha':sp.stats.expon(scale=0.1)},score_func=cv_score)
             # Evaluate with test data
-            print 'Report on Test Data:'
+            print 'Report on Dev Data:'
             print '-----------------------'             
             tp.regressor_eval(rgrs_trained,testX,testY)
 
@@ -774,19 +790,18 @@ if __name__=='__main__':
     print '####### Check results in the plots folder#####'
 
     print '##### Loading data for cluster analysis ######'
-    X,comp = tca.load_all_scores()
+    X,Y,_,comp = __loaddata__()
     print '######## Performing cluster analysis #########'
     evaluate_clusters_pretty(X,comp,outfilename='./plots/')
     print '###### Check results in the plot folder ######'
    
     print '### Loading dataset for classif. and regr. ###'
-    scores,Y,_ = tp.loaddata()
     print '######### Experimenting on regression ########'
     print 'try: ridge, SVR, gp, lasso'
-    regress_ratings(scores,Y,regressor='SVR',\
+    regress_ratings(X,Y,regressor='SVR',\
         cv_score=sl.metrics.r2_score)
     print '###### Experimenting on classification #######'
     print 'try: LinearSVM, SVM_RBF and logit'
-    classify_Good_Bad(scores,Y,classifier='LinearSVM')
+    classify_Good_Bad(X,Y,classifier='LinearSVM')
     print 'Done!'
     

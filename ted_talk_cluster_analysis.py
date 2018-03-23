@@ -2,31 +2,12 @@ import csv
 import os
 import itertools
 import operator as op
-from list_of_talks import all_valid_talks
-from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
+from ted_talk_sentiment import Sentiment_Comparator
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import f_oneway,ttest_ind
-
-def load_all_scores():
-    '''
-    This function loads all the valid TED talks in two groups. The
-    groups are arbitrarily formed by just splitting the list in two halves.
-    The score array has a shape N x M x B, where N is the total
-    number of talks, M is the interpolated length of each talk (100)
-    and B is the number of Bluemix Scores (13).
-    Note: This function takes time
-    '''
-    # Let's form an input to sentiment comparator
-    m = len(all_valid_talks)
-    dict_input = {'group_1':all_valid_talks[:m/2],
-                  'group_2':all_valid_talks[m/2:]}
-    # Load into sentiment comparator for all the pre-comps
-    comp = Sentiment_Comparator(dict_input,read_bluemix)
-    X = np.array([comp.sentiments_interp[atalk] for atalk in comp.alltalks])
-    return X,comp
 
 def get_clust_dict(X,clusterer,comparator):
     '''
@@ -69,7 +50,7 @@ def clust_onescore_stand(X_1,clusterer,comparator,perform_stand=True):
             result_dict['cluster_'+str(lab)].append(talkid)
         else:
             result_dict['cluster_'+str(lab)]=[talkid]
-    return result_dict
+    return result_dict,mean_,std_
 
 def clust_separate_stand(X,clusterer,comparator,csvcontent,\
     csv_vid_idx,perform_stand=True):
@@ -85,8 +66,9 @@ def clust_separate_stand(X,clusterer,comparator,csvcontent,\
     avg_dict = {}
     for s in range(B):
         # Perform clustering over each score
-        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,\
+        clust_dict,mean_,std_ = clust_onescore_stand(X[:,:,s],clusterer,\
             comparator,perform_stand)
+
         comparator.reform_groups(clust_dict)
         avg = comparator.calc_group_mean()
         # Although it computed the average for all the columns, I need
@@ -113,7 +95,7 @@ def clust_separate_stand(X,clusterer,comparator,csvcontent,\
     return avg_dict
 
 def evaluate_clust_separate_stand(X,clusterer,comparator,\
-    csvcontent,csv_id,b_=None,outfilename=None):
+    csvcontent,csv_id,b_=None,outfilename=None,perform_stand=True):
     '''
     It is similar to clust_separate_stand, but instead of returning
     a dictionary, it draws the cluster means and evaluate the differences
@@ -133,15 +115,19 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
     plt.close('all')
     # s is the index of a bluemix score
     cluster_means = {}
+    normalizer_params = {}
     for s in range(B):
         # If b_ is specified, just compute one score and skip others
         if b_ and not b_ == s:
             continue
         # Perform clustering over each score
-        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,comparator)
+        clust_dict,mean_,std_ = clust_onescore_stand(X[:,:,s],clusterer,\
+            comparator,perform_stand)
         comparator.reform_groups(clust_dict)
         avg = comparator.calc_group_mean()
         cluster_means[comparator.column_names[s]] = avg
+        normalizer_params[comparator.column_names[s]+'_mean'] = mean_
+        normalizer_params[comparator.column_names[s]+'_std'] = std_
         for aclust in avg:
             if not comparator.column_names[s] in avg_dict:
                 avg_dict[comparator.column_names[s]] = {aclust:avg[aclust][:,s]}
@@ -219,7 +205,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
             continue
         else:
             draw_boxplots(pvals,allvals,s,comparator,outfilename=outfilename)         
-    return cluster_means
+    return cluster_means,normalizer_params
 
 def draw_boxplots(pvals,allvals,s,comparator,outfilename=None):
     # Draw the box plot for Totalviews first
@@ -256,7 +242,7 @@ def read_index(indexfile):
                     content[akey]=[arow[akey]]
                 else:
                     content[akey].append(arow[akey])        
-        return content,vid_idx
+    return content,vid_idx
 
 def draw_clusters(avg_dict,column_names,fullyaxis=False,\
         outfilename=None):
