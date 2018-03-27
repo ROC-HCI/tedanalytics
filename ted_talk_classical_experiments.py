@@ -45,10 +45,14 @@ from list_of_talks import allrating_samples, all_valid_talks, hi_lo_files
 comparator = ts.Sentiment_Comparator(hi_lo_files) 
 # Prepare the data loader
 def __loaddata__(indexfile='./index.csv'):
+    kwlist = ['beautiful', 'ingenious', 'fascinating',
+            'obnoxious', 'confusing', 'funny', 'inspiring',
+             'courageous', 'ok', 'persuasive', 'longwinded', 
+             'informative', 'jaw-dropping', 'unconvincing','Totalviews']
     csv_,vid = tca.read_index(indexfile)
     dict_input = {'all_talks':all_valid_talks}
     # Load into sentiment comparator for all the pre-comps
-    comp = Sentiment_Comparator(dict_input)
+    comp = ts.Sentiment_Comparator(dict_input)
     scores=[]
     Y=[]
     for atalk in comp.alltalks:
@@ -471,7 +475,7 @@ def clusters_pretty_draw(X,comp,outfilename='TED_stats/draw_clusters_pretty.png'
         
 def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png',
     out_clustermeans = 'misc/cluster_params.pkl',
-    dbscan_params={'eps':7.55, 'min_samples':15}):
+    dbscan_params={'eps':10, 'min_samples':15}):
     '''
     Similar to clusters_pretty_draw, but it also computes box plots of the
     ratings in order to evaluate the quality of the clusters in terms of
@@ -494,11 +498,10 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png',
     # km = SpectralClustering(n_clusters = 7, eigen_solver = 'arpack')
     csvcontent,csv_vid_idx = tca.read_index(indexfile = './index.csv')
     outfilename = os.path.join(ted_data_path,outfilename)
-    cluster_means,normalizer_params = tca.evaluate_clust_separate_stand(X,
+    cluster_means = tca.evaluate_clust_separate_stand(X,
         km,comp,csvcontent,csv_vid_idx,outfilename=outfilename)
     cluster_mean_file = os.path.join(ted_data_path,out_clustermeans)
-    dbscan_params.update({'cluster_means':cluster_means,
-        'normalizer_params':normalizer_params})
+    dbscan_params['cluster_means']=cluster_means
     cp.dump(dbscan_params,open(cluster_mean_file,'wb'))
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file

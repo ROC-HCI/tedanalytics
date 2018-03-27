@@ -11,10 +11,6 @@ from ted_talk_sentiment import Sentiment_Comparator, read_bluemix
 from TED_data_location import ted_data_path
 import ted_talk_cluster_analysis as tca
 
-kwlist = ['beautiful', 'ingenious', 'fascinating',
-            'obnoxious', 'confusing', 'funny', 'inspiring',
-             'courageous', 'ok', 'persuasive', 'longwinded', 
-             'informative', 'jaw-dropping', 'unconvincing','Totalviews']
 
 # def traintest_idx(N,testsize=0.3):
 #     '''

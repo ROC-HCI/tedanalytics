@@ -44,13 +44,14 @@ def clust_onescore_stand(X_1,clusterer,comparator,perform_stand=True):
         clusterer.fit(Z)
     else:
         clusterer.fit(X_1)
+    
     labls = clusterer.labels_
     for lab,talkid in zip(labls,comparator.alltalks):
         if result_dict.get('cluster_'+str(lab)):
             result_dict['cluster_'+str(lab)].append(talkid)
         else:
             result_dict['cluster_'+str(lab)]=[talkid]
-    return result_dict,mean_,std_
+    return result_dict
 
 def clust_separate_stand(X,clusterer,comparator,csvcontent,\
     csv_vid_idx,perform_stand=True):
@@ -66,7 +67,7 @@ def clust_separate_stand(X,clusterer,comparator,csvcontent,\
     avg_dict = {}
     for s in range(B):
         # Perform clustering over each score
-        clust_dict,mean_,std_ = clust_onescore_stand(X[:,:,s],clusterer,\
+        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,\
             comparator,perform_stand)
 
         comparator.reform_groups(clust_dict)
@@ -106,33 +107,27 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
     2. Pairwise multiple t-test with Bonferroni correction
     3. Effectsize and direction of the clusters on the ratings
     '''
+    # Shape of X: Number of talks x talk size (100) x IBM Scores (13)
     N,M,B = X.shape
     avg_dict = {}
-    kwlist = ['beautiful', 'ingenious', 'fascinating',
+    rating_names = ['beautiful', 'ingenious', 'fascinating',
                 'obnoxious', 'confusing', 'funny', 'inspiring',
                  'courageous', 'ok', 'persuasive', 'longwinded', 
                  'informative', 'jaw-dropping', 'unconvincing','Totalviews']
     plt.close('all')
     # s is the index of a bluemix score
-    cluster_means = {}
-    normalizer_params = {}
     for s in range(B):
         # If b_ is specified, just compute one score and skip others
         if b_ and not b_ == s:
             continue
         # Perform clustering over each score
-        clust_dict,mean_,std_ = clust_onescore_stand(X[:,:,s],clusterer,\
+        clust_dict = clust_onescore_stand(X[:,:,s],clusterer,\
             comparator,perform_stand)
         comparator.reform_groups(clust_dict)
         avg = comparator.calc_group_mean()
-        cluster_means[comparator.column_names[s]] = avg
-        normalizer_params[comparator.column_names[s]+'_mean'] = mean_
-        normalizer_params[comparator.column_names[s]+'_std'] = std_
-        for aclust in avg:
-            if not comparator.column_names[s] in avg_dict:
-                avg_dict[comparator.column_names[s]] = {aclust:avg[aclust][:,s]}
-            else:
-                avg_dict[comparator.column_names[s]][aclust]=avg[aclust][:,s]
+        # Getting the correct trajectory from avg
+        avg_dict[comparator.column_names[s]]=\
+            {aclust:avg[aclust][:,s] for aclust in avg}
         # Pretty draw the clusters
         draw_clusters_pretty(avg_dict,comparator,csvcontent,csv_id,
             b_=s,outfilename=outfilename)
@@ -145,7 +140,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
         print '{:^50}'.format('HYPOTHESIS TESTS')
         print '{:^50}'.format('for IBM Score:'+comparator.column_names[s])
         print '='*50
-        for akw in kwlist:
+        for akw in rating_names:
             if akw == 'Totalviews':
                 ratvals = {aclust:[int(csvcontent[akw][csv_id[avid]]) for avid\
                     in comparator.groups[aclust]] for aclust in \
@@ -163,10 +158,10 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
                 print 'ANOVA p value ('+akw+'):',pval
                 # Bonferroni Correction for tests over multiple ratings
                 print 'ANOVA p value ('+akw+') with Bonferroni:',\
-                    pval*float(len(kwlist)),
-                if pval*float(len(kwlist)) < 0.05:
+                    pval*float(len(rating_names)),
+                if pval*float(len(rating_names)) < 0.05:
                     print '< 0.05'
-                    pvals[akw]=pval*float(len(kwlist))
+                    pvals[akw]=pval*float(len(rating_names))
                     allvals[akw] = ratval_itemlist
                 else:
                     print 'not significant'
@@ -183,7 +178,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
                     equal_var=False)
                 # Perform Bonferroni Correction for multiple t-tests
                 # and multiple ratings
-                pval_t = pval_t*float(paircount)*float(len(kwlist))
+                pval_t = pval_t*float(paircount)*float(len(rating_names))
                 # Check significance
                 if pval_t < 0.05:
                     print 'p-val of ttest (with Bonferroni) in "'+akw+\
@@ -205,7 +200,7 @@ def evaluate_clust_separate_stand(X,clusterer,comparator,\
             continue
         else:
             draw_boxplots(pvals,allvals,s,comparator,outfilename=outfilename)         
-    return cluster_means,normalizer_params
+    return avg_dict
 
 def draw_boxplots(pvals,allvals,s,comparator,outfilename=None):
     # Draw the box plot for Totalviews first
@@ -285,7 +280,7 @@ def draw_clusters_pretty(avg_dict,comp,csvcontent,vid_idx,
     X = np.array([comp.sentiments_interp[atalk] for atalk in comp.alltalks])
     M = np.size(X,axis=1)
     colidx = {col:i for i,col in enumerate(comp.column_names)}
-    kwlist = ['beautiful', 'ingenious', 'fascinating',
+    rating_names = ['beautiful', 'ingenious', 'fascinating',
                 'obnoxious', 'confusing', 'funny', 'inspiring',
                  'courageous', 'ok', 'persuasive', 'longwinded', 
                  'informative', 'jaw-dropping', 'unconvincing']
@@ -322,7 +317,7 @@ def draw_clusters_pretty(avg_dict,comp,csvcontent,vid_idx,
             print
             print aclust
             print '============'
-            for j,akw in enumerate(kwlist):
+            for j,akw in enumerate(rating_names):
                 amean_rat = np.mean(\
                     [float(csvcontent[akw][i])/float(csvcontent[\
                     'total_count'][i])*100 for i in f20vids])

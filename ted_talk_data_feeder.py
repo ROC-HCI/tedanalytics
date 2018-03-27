@@ -150,29 +150,6 @@ def read_openface_feat(csv_name =
                 for label in labels]
     return X,labels
 
-def read_sentiment_feat(talklist=lst_talks.all_valid_talks,
-    cacheFolder='misc/'):
-    '''
-    Read the summary statistics for narrative trajectory features.
-    Reading the raw sentiment scores and processing it takes a lot
-    of time. Thefore, this function tries to cache the results on
-    its first call and save the features in the cache folder.
-    '''
-    cachepath = os.path.join(ted_data_path,cacheFolder)
-    cachefile = os.path.join(cachepath,'processed_sentiment_scores.pkl')
-    if os.path.exists(cachefile):
-        X,labels = cp.load(open(cachefile))
-        if set(X.keys())==set(talklist):
-            return X,labels
-    comp = ts.Sentiment_Comparator({'all_talks':talklist})
-    scorelist = comp.sentiments_interp.values()
-    talklist = comp.sentiments_interp.keys()
-    X,labels = __compute_summary__(scorelist,comp.column_names)
-    # Convert to dictionary
-    X = {akey:vals for akey,vals in zip(talklist,X)}
-    cp.dump((X,labels),open(cachefile,'wb'))
-    return X,labels
-
 def read_prosody_feat(talklist=lst_talks.all_valid_talks,
     foldername = 'TED_feature_prosody/full_video'):
     '''
@@ -214,6 +191,29 @@ def read_lexical_feat(talklist=lst_talks.all_valid_talks,
             continue
         X[atalk] = [arow[alabel] for alabel in labels]
     return X, labels
+
+def read_sentiment_feat(talklist=lst_talks.all_valid_talks,
+    cacheFolder='misc/'):
+    '''
+    Read the summary statistics for narrative trajectory features.
+    Reading the raw sentiment scores and processing it takes a lot
+    of time. Thefore, this function tries to cache the results on
+    its first call and save the features in the cache folder.
+    '''
+    cachepath = os.path.join(ted_data_path,cacheFolder)
+    cachefile = os.path.join(cachepath,'processed_sentiment_scores.pkl')
+    if os.path.exists(cachefile):
+        X,labels = cp.load(open(cachefile))
+        if set(X.keys())==set(talklist):
+            return X,labels
+    comp = ts.Sentiment_Comparator({'all_talks':talklist})
+    scorelist = comp.sentiments_interp.values()
+    talklist = comp.sentiments_interp.keys()
+    X,labels = __compute_summary__(scorelist,comp.column_names)
+    # Convert to dictionary
+    X = {akey:vals for akey,vals in zip(talklist,X)}
+    cp.dump((X,labels),open(cachefile,'wb'))
+    return X,labels
 
 def __compute_summary__(scores,col_names):
     '''
@@ -381,6 +381,10 @@ def main():
     crop_glove_dictionary()
     print 'Preparing Sentiment features'
     read_sentiment_feat()
+    print 'Preparing Storytelling features'
+    import ted_talk_classical_experiments as ttce
+    X,_,_,comp = ttce.__loaddata__()
+    ttce.evaluate_clusters_pretty()
     print 'Preparing Lexical Features'
     lex.prepare_lexical_feat()
 
