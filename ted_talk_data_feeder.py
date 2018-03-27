@@ -167,11 +167,12 @@ def read_prosody_feat(talklist=lst_talks.all_valid_talks,
         if not labels:
             labels = ['intensity_'+akey for akey in data['intensity'].keys()]+\
                 ['pitch_'+akey for akey in data['pitch'].keys()]+\
-                ['intensity_'+akey+'_'+str(i) for akey in \
-                    data['intensity'].keys() for i in range(5)]
+                ['formant_'+akey+'_'+str(i) for akey in \
+                    data['formant'].keys() for i in range(5)]
         X[atalk] = data['intensity'].values()+\
             data['pitch'].values()+\
-            np.concatenate(data['formant'].values(),axis=0).tolist()
+            [data['formant'][akey][i] for akey in \
+                    data['formant'].keys() for i in range(5)]
 
     return X, labels
 
@@ -233,6 +234,12 @@ def __compute_summary__(scores,col_names):
     # Concat standard deviation of the scores 
     X = np.concatenate((X,np.std(scores,axis=1)),axis=1)
     labels+= [col+'_std' for col in col_names]
+    # Concat standard deviation of the scores 
+    X = np.concatenate((X,sp.stats.skew(scores,axis=1)),axis=1)
+    labels+= [col+'_skew' for col in col_names]
+    # Concat standard deviation of the scores 
+    X = np.concatenate((X,sp.stats.kurtosis(scores,axis=1)),axis=1)
+    labels+= [col+'_kurt' for col in col_names]        
     return X.tolist(), labels
 
 def concat_features(X1, label1, X2, label2):

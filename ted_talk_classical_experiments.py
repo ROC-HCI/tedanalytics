@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import scipy as sp
 import sklearn as sl
@@ -506,7 +507,9 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png',
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file
     
-def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10):
+def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10,
+    modality=['pose','face','trajectory','audio','lexical'],
+    scale_rating=True,lowerthresh_Y=50.,upperthresh_Y=50.):
     '''
     Classify between groups of High ratings and low ratings using
     LinearSVM, SVM_rbf and logistic regression. The classifier
@@ -518,24 +521,32 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10):
     tp = ted_talk_prediction module
     Note: loaddata is a slow function
     '''
+    old_time = time.time()
     print 'Reading Features ...'
-    # TODO: Make these independently selectable
     # Get body lanugage feature
-    X,label = ttdf.read_openpose_feat()
-    print 'Openpose features read'
+    X={atalk:[] for atalk in all_valid_talks}
+    label=[]
+    # Add pose features
+    if 'pose' in modality:
+        X,label = ttdf.concat_features(X,label,*ttdf.read_openpose_feat())
+        print 'Openpose features read'
     # Add facial features
-    X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
-    print 'Facial features read'
+    if 'face' in modality:
+        X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
+        print 'Openface features read'
     # Add sentiment features
-    X,label = ttdf.concat_features(X,label,*ttdf.read_sentiment_feat(X.keys()))
-    print 'Sentiment features read'
+    if 'trajectory' in modality:
+        X,label = ttdf.concat_features(X,label,\
+            *ttdf.read_sentiment_feat(X.keys()))
+        print 'Trajectory features read'
     # Add Prosody features
-    X,label = ttdf.concat_features(X,label,*ttdf.read_prosody_feat(X.keys()))
-    print 'Prosody features read'
+    if 'audio' in modality:
+        X,label = ttdf.concat_features(X,label,*ttdf.read_prosody_feat(X.keys()))
+        print 'Prosody features read'
     # Add Lexical features
-    X,label = ttdf.concat_features(X,label,*ttdf.read_lexical_feat(X.keys()))
-    print 'Prosody features read'
-    # TODO: Add Storytelling (clusters) features based on training data
+    if 'lexical' in modality:
+        X,label = ttdf.concat_features(X,label,*ttdf.read_lexical_feat(X.keys()))
+        print 'Lexical features read'
     print 'Complete'
 
     # Train-Test set preparation
@@ -546,9 +557,9 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10):
     normalizer = StandardScaler().fit(trainX)
     trainX = normalizer.transform(trainX)
     testX = normalizer.transform(testX)
-    # TODO: Save all classifier parameters (model, normalizer)
 
-    Y,_,ylabels=ttdf.binarized_ratings(firstThresh=33.333,secondThresh=66.667)[:3]
+    Y,_,ylabels=ttdf.binarized_ratings(firstThresh=lowerthresh_Y,\
+        secondThresh=upperthresh_Y,scale_rating=scale_rating)[:3]
 
     allresults = {}
     for i,kw in enumerate(ylabels):
@@ -619,89 +630,66 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10):
             raise IOError('Classifier name not recognized')
         allresults[kw]=results
 
-    # Print the average results
-
+    # Print and store the average results
     avgresults = np.nanmean(allresults.values(),axis=0)
-    for i,label in enumerate(['avg_prec','avg_rec','avg_fscore','avg_acc','avg_AUC']):
-        print label,avgresults[i]
+    avgresults_keys = ['avg_prec','avg_rec','avg_fscore',\
+            'avg_acc','avg_AUC']
+    allresults['avg_results'] = {akey:avgresults[i] for i,akey in\
+        enumerate(avgresults_keys)}
+    maxresults = np.nanmax(allresults.values(),axis=0)
+    maxresults_keys = ['max_prec','max_rec','max_fscore',\
+            'max_acc','max_AUC']
+    allresults['max_results'] = {akey:maxresults[i] for i,akey in\
+        enumerate(maxresults_keys)}
+    print allresults['avg_results']
+    print allresults['max_results']
+    print 'Computation Time:',time.time()-old_time
+
+    # Store all the important information
+    allresults['best_classifier']=clf_trained
+    allresults['classifier_type']=classifier
+    allresults['c_scale']=c_scale
+    allresults['data_normalizer']=normalizer
+    allresults['scale_rating']=scale_rating
+    allresults['modalities_used']=modality
+    allresults['lowerthresh_Y']=lowerthresh_Y
+    allresults['upperthresh_Y']=upperthresh_Y
+
+    # Put a suitable filename and store allresults
+    resultfile = 'results_{0}_{1}_{2}_{3}_{4}_{5}.pkl'.format(classifier,\
+        c_scale,scale_rating,''.join([m[0] for m in modality]),\
+        lowerthresh_Y,upperthresh_Y)
+    resultfile = os.path.join(ted_data_path,'TED_stats/'+resultfile)
+    cp.dump(allresults,open(resultfile,'wb'))
+
+def put_in_bluehive():
+    '''
+    Unimportant code to submit job in Bluehive
+    '''
+    params=[{'classifier':'logistic_l1','c_scale':10.,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':2.,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':1.,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':0.5.,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':0.1.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':10.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':2.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':1.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':0.5.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':0.1.,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':10.,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':2.,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':1.,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':0.5.,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':0.1.,'nb_tr_iter':100}]
+    if not 'SLURM_ARRAY_TASK_ID' in os.environ:
+        print 'Must run as job array in Bluehive'
+    classify_multimodal(**params[os.environ['SLURM_ARRAY_TASK_ID']])
+
+
+if __name__=='__main__':
+    put_in_bluehive()
 
 ####### Methods below this line are not ready for new code structure #############
-
-def classify_old(scores,Y,classifier='LinearSVM',nb_tr_iter=10):
-    '''
-    Classify between groups of High ratings and low ratings using
-    Two different types of SVM LinearSVM or SVM_rbf. The classifier
-    argument can take these two values.
-    This function trains the classifiers and evaluates their performances.
-
-    Use the following command to get the initial arguments:
-    scores,Y,_,_ = __loaddata__()
-    tp = ted_talk_prediction module
-    Note: loaddata is a slow function
-    '''
-    X,nkw = tp.feat_sumstat(scores)
-    for i,kw in enumerate(tp.kwlist):
-        print
-        print
-        print kw
-        print '================='
-        print 'Predictor:',classifier
-        y = tp.discretizeY(Y,i)
-        X_bin,y_bin = tp.binarize(X,y)
-        m = len(y_bin)
-        
-        # Split in training and test data
-        tridx,tstidx = tp.traintest_idx(len(y_bin))
-        trainX,trainY = X_bin[tridx,:],y_bin[tridx]
-        testX,testY = X_bin[tstidx,:],y_bin[tstidx]
-  
-        # Classifier selection
-        if classifier == 'LinearSVM':
-            clf = sl.svm.LinearSVC()
-            # Train with training data
-            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,\
-                    {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
-                    datname = kw+'_LibSVM')
-            # Evaluate with test data
-            print 'Report on Dev Data'
-            print '-----------------------'            
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of LinearSVM on Dev Data for '+kw)
-        elif classifier == 'SVM_rbf':
-            clf = sl.svm.SVC()
-            # Train with training data
-            try:
-                clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=25),
-                    'gamma':sp.stats.expon(scale=0.05)},
-                    nb_iter=nb_tr_iter,datname=kw)
-                print 'Number of SV:',clf_trained.n_support_
-            except ImportError:
-                raise
-            except:
-                print 'Data is badly scaled for',kw
-                print 'skiping'
-                continue
-            # Evaluate with test data
-            print 'Report on Dev Data'
-            print '-----------------------'                 
-            # Evaluate with test data
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Dev Data for '+kw)
-        elif classifier == 'logit':
-            clf = sl.linear_model.LogisticRegression()
-            # Train with training data
-            clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=1)},
-                    nb_iter=nb_tr_iter,datname=kw)
-            # Evaluate with test data
-            print 'Report on Dev Data'
-            print '-----------------------'                 
-            # Evaluate with test data
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Dev Data for '+kw)
-
-
 def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
     '''
     Try to predict the ratings using regression methods. Besides training
@@ -773,46 +761,4 @@ def regress_ratings(scores,Y,regressor='SVR',cv_score=sl.metrics.r2_score):
             print 'Report on Dev Data:'
             print '-----------------------'             
             tp.regressor_eval(rgrs_trained,testX,testY)
-
-if __name__=='__main__':
-    infolder = './talks/'
-    outfolder = './TED_stats/'
-    if not os.path.exists('./plots'):
-        os.makedirs('./plots')
-    print '============================================'
-    print '============= Ignore Warnings =============='
-    print 'Note: The results change at each run due to '
-    print 'randomness involved in the predictors       '
-    print '============================================'
-    print '###### Calculcating dataset statistics #####'
-    plot_statistics(infolder,outfolder)
-    print '###### Check results in TED_stats folder ###'
-    print '##############################################'
-    print 'Calculcating dataset statistics (correlations)'
-    plot_correlation(False,infolder,outfolder)
-    print 'Check results in TED_stats folder'
-    print '##############################################'
-
-    print '############ Loading sentiment data ##########'
-    comp = ts.Sentiment_Comparator({'all':all_valid_talks},\
-        ts.read_bluemix)
-    print '############ Calculating global means ########'
-    draw_global_means(comp)
-    print '####### Check results in the plots folder#####'
-
-    print '##### Loading data for cluster analysis ######'
-    X,Y,_,comp = __loaddata__()
-    print '######## Performing cluster analysis #########'
-    evaluate_clusters_pretty(X,comp,outfilename='./plots/')
-    print '###### Check results in the plot folder ######'
-   
-    print '### Loading dataset for classif. and regr. ###'
-    print '######### Experimenting on regression ########'
-    print 'try: ridge, SVR, gp, lasso'
-    regress_ratings(X,Y,regressor='SVR',\
-        cv_score=sl.metrics.r2_score)
-    print '###### Experimenting on classification #######'
-    print 'try: LinearSVM, SVM_RBF and logit'
-    classify_Good_Bad(X,Y,classifier='LinearSVM')
-    print 'Done!'
     
