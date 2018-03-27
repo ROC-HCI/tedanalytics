@@ -61,9 +61,18 @@ kwlist = ['beautiful', 'ingenious', 'fascinating',
 
 def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
         ROCTitle=None,outfilename='TED_stats/classifier_results.png'):
+    '''
+    Given a trained classifier and a set of data, this function computes
+    various performance metrics. The results are printed, saved in pickle
+    files and if requested, saved as plots of ROC curve.
+    '''
     y_pred = clf_trained.predict(X_test)
+    prec,rec,fscore, support = sl.metrics.precision_recall_fscore_support(\
+            y_test,y_pred)    
+    accur = sl.metrics.accuracy_score(y_test,y_pred)
+    results = [np.mean(prec),np.mean(rec),np.mean(fscore),accur,np.nan]
     print sl.metrics.classification_report(y_test,y_pred)
-    print 'Accuracy:',sl.metrics.accuracy_score(y_test,y_pred)
+    print 'Accuracy:',accur
     if use_proba:
         try:
             # trying to get the confidence scores
@@ -77,23 +86,24 @@ def classifier_eval(clf_trained,X_test,y_test,use_proba=True,
                 raise
         auc = met.roc_auc_score(y_test,y_score)
         print 'AUC:',auc
+        results[-1]=auc
         fpr,tpr,_ = sl.metrics.roc_curve(y_test,y_score,pos_label=1)        
-        plt.figure(0)
-        plt.clf()
-        plt.plot(fpr,tpr,color='darkorange',label='ROC Curve (AUC={0:0.2f})'.\
-            format(auc))
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
+        
         if ROCTitle:
+            plt.figure(0)
+            plt.clf()
+            plt.plot(fpr,tpr,color='darkorange',label='ROC Curve (AUC={0:0.2f})'.\
+                format(auc))
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
             plt.title(ROCTitle)
-        plt.legend()
-        if not outfilename:
+            plt.legend()
             plt.show()
-        else:
             outfilename = os.path.join(ted_data_path,outfilename)
             split_fn = os.path.split(outfilename)
             plt.savefig(os.path.join(split_fn[0],ROCTitle+'_'+split_fn[1]))
             plt.close()
+    return results
         
 def regressor_eval(regressor_trained,X_test,y_test):
     y_pred = regressor_trained.predict(X_test)
@@ -107,22 +117,27 @@ def regressor_eval(regressor_trained,X_test,y_test):
 
 def train_with_CV(X,y,predictor,cvparams,
         score_func=met.roc_auc_score,Nfold=3,nb_iter=10,
-        showCV_report=False,use_proba=True,datname=''):
+        showCV_report=False,use_proba=True,datname='',predictor_type='classifier'):
     '''
     Trains the estimator with N fold cross validation. The number of fold
     is given by the parameter Nfold. cvparams is a dictionary specifying
     the hyperparameters of the classifier that needs to be tuned. Scorefunc
-    is the metric to evaluate the classifier. 
+    is the metric to evaluate the classifier.
     If the number of unique y values are <=3, then the predictor is assumed
     to be a classifier. Otherwise, it is assumed to be a regressor. The
     assumption of classifier/regresssor is used when evaluating the predictor.
     For a classifier, the default scorer is roc_auc_score, for regressor,
     default scorer is r2_score
-    '''    
-    if len(np.unique(y))<=3:
-        predictor_type = 'classifier'
-    else:
-        predictor_type = 'regressor'
+    '''
+    # If predictor_type is classifier, drop all the zero-valued y's and make
+    # sure there are two classes
+    if predictor_type=='classifier' and 0 in y:
+        nonzero_idx = np.where(y!=0)[0]
+        y = y[nonzero_idx]
+        assert len(set(y))==2,'There must be two (and only two) class labels'
+        X = X[nonzero_idx:]
+
+
     # If classifier, use the given scorefunction. If regressor, and the
     # given scorefunction is the default one, use the default regressor score.
     # Otherwise, just use the given scorefunction.

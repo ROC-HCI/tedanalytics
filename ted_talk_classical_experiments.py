@@ -503,7 +503,7 @@ def evaluate_clusters_pretty(X,comp,outfilename='TED_stats/eval_pretty.png',
     print 'Group of out files:',outfilename
     print 'Cluster means saved in:',cluster_mean_file
     
-def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
+def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10):
     '''
     Classify between groups of High ratings and low ratings using
     LinearSVM, SVM_rbf and logistic regression. The classifier
@@ -519,14 +519,20 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
     # TODO: Make these independently selectable
     # Get body lanugage feature
     X,label = ttdf.read_openpose_feat()
+    print 'Openpose features read'
     # Add facial features
     X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
+    print 'Facial features read'
     # Add sentiment features
     X,label = ttdf.concat_features(X,label,*ttdf.read_sentiment_feat(X.keys()))
+    print 'Sentiment features read'
     # Add Prosody features
     X,label = ttdf.concat_features(X,label,*ttdf.read_prosody_feat(X.keys()))
+    print 'Prosody features read'
     # Add Lexical features
-    # Add Storytelling (clusters) features based on training data
+    X,label = ttdf.concat_features(X,label,*ttdf.read_lexical_feat(X.keys()))
+    print 'Prosody features read'
+    # TODO: Add Storytelling (clusters) features based on training data
     print 'Complete'
 
     # Train-Test set preparation
@@ -539,42 +545,38 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
     testX = normalizer.transform(testX)
     # TODO: Save all classifier parameters (model, normalizer)
 
-    # TODO: Fix for multi-threshold
-    Y,_,ylabels = ttdf.binarized_ratings()
+    Y,_,ylabels=ttdf.binarized_ratings(firstThresh=33.333,secondThresh=66.667)[:3]
 
+    allresults = {}
     for i,kw in enumerate(ylabels):
         print
         print
         print kw
         print '================='
         print 'Predictor:',classifier
-        # y = tp.discretizeY(Y,i)
-        # X_bin,y_bin = tp.binarize(X,y)
-        # m = len(y_bin)
         
-        # Split in training and test data
-        
+        # Split in training and test data        
         trainY = [Y[atalk][i] for atalk in tridx]
         testY = [Y[atalk][i] for atalk in tstidx]
   
         # Classifier selection
         if classifier == 'LinearSVM':
             clf = sl.svm.LinearSVC()
-            # Train with training data
+            # Train with training data and crossvalidation
             clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,\
-                    {'C':sp.stats.expon(scale=5.)},nb_iter=nb_tr_iter,\
+                    {'C':sp.stats.expon(scale=c_scale)},nb_iter=nb_tr_iter,\
                     datname = kw+'_LibSVM')
             # Evaluate with test data
             print 'Report on Dev Data'
             print '-----------------------'            
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=kw)
+            results = tp.classifier_eval(clf_trained,testX,testY)
         elif classifier == 'SVM_rbf':
             clf = sl.svm.SVC()
-            # Train with training data
+            # Train with training data and crossvalidation
             try:
                 clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=25),
-                    'gamma':sp.stats.expon(scale=0.05)},
+                    {'C':sp.stats.expon(scale=c_scale),
+                    'gamma':sp.stats.expon(scale=0.5)},
                     nb_iter=nb_tr_iter,datname=kw)
                 print 'Number of SV:',clf_trained.n_support_
             except ImportError:
@@ -587,32 +589,38 @@ def classify_multimodal(classifier='logistic_l1',nb_tr_iter=10):
             print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Dev Data for '+kw)
+            results = tp.classifier_eval(clf_trained,testX,testY)
         elif classifier == 'logistic_regression':
-            clf = sl.linear_model.LogisticRegression()
-            # Train with training data
+            clf = sl.linear_model.LogisticRegression(penalty='l2')
+            # Train with training data and crossvalidation
             clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=1)},
+                    {'C':sp.stats.expon(scale=c_scale)},
                     nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
             print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Dev Data for '+kw)
+            results = tp.classifier_eval(clf_trained,testX,testY)
         elif classifier == 'logistic_l1':
             clf = sl.linear_model.LogisticRegression(penalty='l1')
-            # Train with training data
+            # Train with training data and crossvalidation
             clf_trained,auc=tp.train_with_CV(trainX,trainY,clf,
-                    {'C':sp.stats.expon(scale=1)},
+                    {'C':sp.stats.expon(scale=c_scale)},
                     nb_iter=nb_tr_iter,datname=kw)
             # Evaluate with test data
             print 'Report on Dev Data'
             print '-----------------------'                 
             # Evaluate with test data
-            tp.classifier_eval(clf_trained,testX,testY,ROCTitle=\
-                'ROC of SVM_RBF on Dev Data for '+kw)
+            results = tp.classifier_eval(clf_trained,testX,testY)
+        else:
+            raise IOError('Classifier name not recognized')
+        allresults[kw]=results
+
+    # Print the average results
+
+    avgresults = np.nanmean(allresults.values(),axis=0)
+    for i,label in enumerate(['avg_prec','avg_rec','avg_fscore','avg_acc','avg_AUC']):
+        print label,avgresults[i]
 
 ####### Methods below this line are not ready for new code structure #############
 
