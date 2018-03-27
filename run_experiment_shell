@@ -2,11 +2,12 @@
 #SBATCH -p standard
 #SBATCH --mem=4gb
 #SBATCH -c 1
-#SBATCH -a 0-9
-#SBATCH -t 3-01:00:00  
+#SBATCH -a 0-14
+#SBATCH -t 23:00:00  
 #SBATCH -J tanv_eval
 #SBATCH -o /scratch/mtanveer/output/eval_output%j
 #SBATCH -e /scratch/mtanveer/output/eval_error%j
 
 module load anaconda
-python ted_talk_deep_learning_experiments.py
+#python ted_talk_deep_learning_experiments.py
+python ted_talk_classical_experiments.py

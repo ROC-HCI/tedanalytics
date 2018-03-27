@@ -669,21 +669,22 @@ def put_in_bluehive():
     params=[{'classifier':'logistic_l1','c_scale':10.,'nb_tr_iter':100},
     {'classifier':'logistic_l1','c_scale':2.,'nb_tr_iter':100},
     {'classifier':'logistic_l1','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':0.5.,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':0.1.,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':0.5,'nb_tr_iter':100},
+    {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100},
     {'classifier':'LinearSVM','c_scale':10.,'nb_tr_iter':100},
     {'classifier':'LinearSVM','c_scale':2.,'nb_tr_iter':100},
     {'classifier':'LinearSVM','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':0.5.,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':0.1.,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':0.5,'nb_tr_iter':100},
+    {'classifier':'LinearSVM','c_scale':0.1,'nb_tr_iter':100},
     {'classifier':'logistic_regression','c_scale':10.,'nb_tr_iter':100},
     {'classifier':'logistic_regression','c_scale':2.,'nb_tr_iter':100},
     {'classifier':'logistic_regression','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':0.5.,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':0.1.,'nb_tr_iter':100}]
+    {'classifier':'logistic_regression','c_scale':0.5,'nb_tr_iter':100},
+    {'classifier':'logistic_regression','c_scale':0.1,'nb_tr_iter':100}]
     if not 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'Must run as job array in Bluehive'
-    classify_multimodal(**params[os.environ['SLURM_ARRAY_TASK_ID']])
+        return
+    classify_multimodal(**params[int(os.environ['SLURM_ARRAY_TASK_ID'])])
 
 
 if __name__=='__main__':
