@@ -632,8 +632,7 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10,
 
     # Print and store the average results
     avgresults = np.nanmean(allresults.values(),axis=0)
-    avgresults_keys = ['avg_prec','avg_rec','avg_fscore',\
-            'avg_acc','avg_AUC']
+    avgresults_keys = ['avg_prec','avg_rec','avg_fscore','avg_acc','avg_AUC']
     allresults['avg_results'] = {akey:avgresults[i] for i,akey in\
         enumerate(avgresults_keys)}
     maxresults = np.nanmax(allresults.values(),axis=0)
@@ -666,21 +665,101 @@ def put_in_bluehive():
     '''
     Unimportant code to submit job in Bluehive
     '''
-    params=[{'classifier':'logistic_l1','c_scale':10.,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':2.,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':0.5,'nb_tr_iter':100},
-    {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':10.,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':2.,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':0.5,'nb_tr_iter':100},
-    {'classifier':'LinearSVM','c_scale':0.1,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':10.,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':2.,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':1.,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':0.5,'nb_tr_iter':100},
-    {'classifier':'logistic_regression','c_scale':0.1,'nb_tr_iter':100}]
+    # Run 1
+    # params=[{'classifier':'logistic_l1','c_scale':10.,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':2.,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':1.,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.5,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':10.,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':2.,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':1.,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.5,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.1,'nb_tr_iter':100},
+    # {'classifier':'logistic_regression','c_scale':10.,'nb_tr_iter':100},
+    # {'classifier':'logistic_regression','c_scale':2.,'nb_tr_iter':100},
+    # {'classifier':'logistic_regression','c_scale':1.,'nb_tr_iter':100},
+    # {'classifier':'logistic_regression','c_scale':0.5,'nb_tr_iter':100},
+    # {'classifier':'logistic_regression','c_scale':0.1,'nb_tr_iter':100}]
+
+    # Run 2
+    # params=[
+    # {'classifier':'logistic_l1','c_scale':1.75,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':1.35,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':1.15,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.85,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.75,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.65,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.45,'nb_tr_iter':100},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':1.75,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':1.35,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':1.15,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.85,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.75,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.65,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.45,'nb_tr_iter':100},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100}]
+
+    # Run 3
+    # params=[
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':50.,'upperthresh_Y':50.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':30.,'upperthresh_Y':70.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':10.,'upperthresh_Y':90.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':50.,'upperthresh_Y':50.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':30.,'upperthresh_Y':70.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':10.,'upperthresh_Y':90.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':50.,'upperthresh_Y':50.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':30.,'upperthresh_Y':70.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':10.,'upperthresh_Y':90.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':50.,'upperthresh_Y':50.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':30.,'upperthresh_Y':70.},
+    # {'classifier':'LinearSVM','c_scale':0.25,'nb_tr_iter':100,'scale_rating':False,'lowerthresh_Y':10.,'upperthresh_Y':90.},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['pose']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['face']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['trajectory']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['audio']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['lexical']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['face','trajectory','audio','lexical']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['pose','trajectory','audio','lexical']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['pose','face','audio','lexical']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['pose','face','trajectory','lexical']},
+    # {'classifier':'logistic_l1','c_scale':0.25,'nb_tr_iter':100,'modality':['pose','face','trajectory','audio']}]
+    
+    # Run 4
+    params=[
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['pose']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['face']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['trajectory']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['audio']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['lexical']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['face','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['pose','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['pose','face','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['pose','face','trajectory','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.005,'nb_tr_iter':100,'modality':['pose','face','trajectory','audio']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['pose']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['face']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['trajectory']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['audio']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['lexical']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['face','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['pose','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['pose','face','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['pose','face','trajectory','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.001,'nb_tr_iter':100,'modality':['pose','face','trajectory','audio']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['pose']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['face']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['trajectory']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['audio']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['lexical']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['face','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['pose','trajectory','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['pose','face','audio','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['pose','face','trajectory','lexical']},
+    {'classifier':'logistic_l1','c_scale':0.0005,'nb_tr_iter':100,'modality':['pose','face','trajectory','audio']}]
+    
+
     if not 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'Must run as job array in Bluehive'
         return

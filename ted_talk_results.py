@@ -1,6 +1,7 @@
 import os
 import json
 import glob
+import csv
 import numpy as np
 import cPickle as cp
 import matplotlib
@@ -158,3 +159,56 @@ def average_results(result_pklfilename='dev_result.pkl',folder_prefix='run_'):
         combined[akey] = np.mean(combined[akey],axis=0).tolist()
     combined['order']=results['order']
     return combined
+
+def tabulate_classical_results(outfile='result_classical.csv'):
+    '''
+    Read and tabulate result files for classical experiments
+    '''
+    rating_names = ['beautiful',
+                    'ingenious',
+                    'fascinating',
+                    'obnoxious',
+                    'confusing',
+                    'funny',
+                    'inspiring',
+                    'courageous',
+                    'ok',
+                    'persuasive',
+                    'longwinded',
+                    'informative',
+                    'jaw-dropping',
+                    'unconvincing']
+    rating_order = ['Prec','Recall','fscore','Accuracy','AUC']
+    result_attributes = ['classifier_type',
+                         'c_scale',
+                         'modalities_used',
+                         'lowerthresh_Y',
+                         'upperthresh_Y',
+                         'scale_rating']
+    summary_results =   ['max_results','avg_results',]
+    other =['best_classifier','data_normalizer']
+      
+    outfilename = os.path.join(ted_data_path,'TED_stats/'+outfile)
+    infilenames = glob.glob(os.path.join(ted_data_path,'TED_stats/results_*'))
+    with open(outfilename,'wb') as fout:
+        header = []
+        for i,afile in enumerate(infilenames):
+            data = cp.load(open(afile))
+            # First time
+            if i == 0:
+                headers = [att for att in result_attributes]
+                headers += [akey for akey in data['avg_results']]
+                headers += [akey for akey in data['max_results']]
+                headers += [arating+'_'+lab for arating in rating_names \
+                    for lab in rating_order]
+                writer = csv.DictWriter(fout,headers)
+                writer.writeheader()
+            # Create rows
+            arow = {att:data[att] for att in result_attributes \
+                if not att=='modalities_used'}
+            arow.update({'modalities_used':'_'.join(data['modalities_used'])})
+            arow.update(data['avg_results'])
+            arow.update(data['max_results'])
+            arow.update({arating+'_'+lab:data[arating][i] for arating in rating_names \
+                    for i,lab in enumerate(rating_order)})
+            writer.writerow(arow)
