@@ -1,13 +1,16 @@
 import cPickle as pickle
 import sys
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity 
 import glob
 import csv
+import os
 import numpy as np
 
 threshold_val = 0.65
 confidence = 0.8
-openface_dir="/localdisk/TED_feature/openface_features/"
+openface_dir="/localdisk/TED_feature/openface_features_all/"
+output_folder = "/p/google-glass/openface_sentencewise_features/"
+meta_location="/p/behavioral/TED_dataset/TED_meta"
 face_vec_dir="/p/behavioral/TED_dataset/TED_feature_openface/face_vector/"
 sentence_boundary_dir="/p/behavioral/TED_dataset/TED_feature_sentence_boundary/"
 
@@ -108,16 +111,18 @@ def get_openface_frames_num_per_sentence(video_num):
 
 		if not sen_time_intervals:
 			return list()
-
-		print len(sen_time_intervals)
-		print sen_time_intervals
 		sentence_frame_num_list=get_openface_frames(video_num,frame_list,sen_time_intervals)
 
 	except:
 		pass
 	return sentence_frame_num_list		
 	
+for afile in glob.glob(os.path.join(meta_location,'*.pkl')):
+        
+	path,filename = os.path.split(afile)
+	print 'Processing:',filename
+	sentence_frame_num_list=get_openface_frames_num_per_sentence(int(filename[:-4]))
+	outfile = os.path.join(output_folder,filename[:-4]+'.pkl')
+	print 'output to:',outfile
+	pickle.dump(sentence_frame_num_list,open(outfile,'wb'))
 
-sentence_frame_num_list=get_openface_frames_num_per_sentence(2365)
-print sentence_frame_num_list
-print len(sentence_frame_num_list)

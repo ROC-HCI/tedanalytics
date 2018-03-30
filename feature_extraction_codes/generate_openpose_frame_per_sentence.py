@@ -1,4 +1,5 @@
 import cPickle as pickle
+import os
 import sys
 from sklearn.metrics.pairwise import cosine_similarity
 import glob
@@ -9,7 +10,9 @@ import matplotlib.pyplot as plt
 
 threshold_val = 0.65
 # batch=int(sys.argv[2])
-openface_dir="/localdisk/out/"
+metafolder='/p/behavioral/TED_dataset/TED_meta/*.pkl'
+outfolder='/p/google-glass/openpose_sentencewise_features'
+openface_dir="/localdisk/TED_feature/openface_features_all/"
 face_vec_dir="/p/behavioral/TED_dataset/TED_feature_openface/face_vector/"
 openpose_dir="/p/behavioral/TED_dataset/TED_feature_openpose/All_JSON/"
 sentence_boundary_dir="/p/behavioral/TED_dataset/TED_feature_sentence_boundary/"
@@ -204,50 +207,55 @@ def get_openface_frames(video_num,frame_list,sen_time_intervals):
 
 def get_openpose_frames_per_sentence(video_num):
 	openpose_features_per_sentence=[]
-	try:
-		cmu_openface_file=face_vec_dir+str(video_num)+".pkl"
-		tadas_openface_file=openface_dir+str(video_num)+"_openface.csv"
-		sentence_boundary_file=sentence_boundary_dir+str(video_num)+'.pkl'
-		
-		frame_list,shape=get_presenter_frames(cmu_openface_file)
+	cmu_openface_file=face_vec_dir+str(video_num)+".pkl"
+	tadas_openface_file=openface_dir+str(video_num)+"_openface.csv"
+	sentence_boundary_file=sentence_boundary_dir+str(video_num)+'.pkl'
+	
+	frame_list,shape=get_presenter_frames(cmu_openface_file)
 
-		if not frame_list:
-			return list()
+	if not frame_list:
+		return list()
 
-		sen_time_intervals=[]
+	sen_time_intervals=[]
 
-		with open(sentence_boundary_file,"rb") as fp:
-			sen_boundaries=pickle.load(fp)
-			sen_boundaries=sen_boundaries['sentences']
-			for bound in sen_boundaries:
-				s=bound['beg_time']
-				e=bound['end_time']
-				if s and e:
-					sen_time_intervals.append([float(s),float(e)])
+	with open(sentence_boundary_file,"rb") as fp:
+		sen_boundaries=pickle.load(fp)
+		sen_boundaries=sen_boundaries['sentences']
+		for bound in sen_boundaries:
+			s=bound['beg_time']
+			e=bound['end_time']
+			if s and e:
+				sen_time_intervals.append([float(s),float(e)])
 
-		if not sen_time_intervals:
-			return list()
+	if not sen_time_intervals:
+		return list()
 
-		print len(sen_time_intervals)
-		sentence_frame_num_list=get_openface_frames(video_num,frame_list,sen_time_intervals)
-		sentence_frame_num_list=[map_to_openpose_frame(video_num,x) for x in sentence_frame_num_list]
+	sentence_frame_num_list=get_openface_frames(video_num,frame_list,sen_time_intervals)
+	sentence_frame_num_list=[map_to_openpose_frame(video_num,x) for x in sentence_frame_num_list]
 
-		for sen_frames in sentence_frame_num_list:
-			if sen_frames:
-				features= get_openpose_features(video_num,sen_frames,shape)
-				openpose_features_per_sentence.append(features)
-			else:
-				openpose_features_per_sentence.append([])
-
-	except:
-		pass
+	for sen_frames in sentence_frame_num_list:
+		if sen_frames:
+			features= get_openpose_features(video_num,sen_frames,shape)
+			openpose_features_per_sentence.append(features)
+		else:
+			openpose_features_per_sentence.append([])
 
 	return openpose_features_per_sentence
 
+if __name__=='__main__':
+	for afile in glob.glob(metafolder): 
+	    path,filename = os.path.split(afile)
+	    outfile = os.path.join(outfolder,filename[:-4]+'.pkl')
+	    if os.path.exists(outfile):
+	    	print 'skiping ...',filename
+	    	continue
+	    print 'Processing:',filename
+	    try:
+	    	openpose_features_per_sentence=get_openpose_frames_per_sentence(int(filename[:-4]))
+	    except:
+	    	continue
+	    
+	    print 'output to:',outfile
+	    pickle.dump(openpose_features_per_sentence,open(outfile,'wb'))
 
 
-openpose_features_per_sentence=get_openpose_frames_per_sentence(2365)
-
-
-	
-print len(openpose_features_per_sentence[0])
