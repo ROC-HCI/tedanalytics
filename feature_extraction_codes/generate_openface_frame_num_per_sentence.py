@@ -146,6 +146,9 @@ if __name__ =='__main__':
                 continue
             # Read original frame data
             in_csvfile = os.path.join(openface_dir,filename[:-4]+'_openface.csv')
+            if not os.path.exists(in_csvfile):
+                print 'not found:',in_csvfile
+                continue
             reader = csv.DictReader(open(in_csvfile))
             allframes=[]
             # Loop over sentence-wise frame list
