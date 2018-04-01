@@ -16,7 +16,8 @@ from TED_data_location import ted_data_path, wordvec_path
 
 import torch
 import torch.autograd as autograd
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pack_padded_sequence
 
 def split_train_test(train_ratio=0.8,talklist=lst_talks.all_valid_talks):
     '''
@@ -373,15 +374,37 @@ def __tree_rating_feeder__(atalk,gpunum=-1):
             rating_t = autograd.Variable(torch.cuda.FloatTensor(y))
     return all_deptree,rating_t.view(1,-1)
 
+def __pad_sequence__(sequences, batch_first=False, padding_value=0):
+    max_size = sequences[0].size()
+    max_len, trailing_dims = max_size[0], max_size[1:]
+    prev_l = max_len
+    if batch_first:
+        out_dims = (len(sequences), max_len) + trailing_dims
+    else:
+        out_dims = (max_len, len(sequences)) + trailing_dims
+
+    out_variable = autograd.Variable(sequences[0].data.new(*out_dims).fill_(padding_value))
+    for i, variable in enumerate(sequences):
+        length = variable.size(0)
+        if prev_l < length:
+            raise ValueError("lengths array has to be sorted in decreasing order")
+        prev_l = length
+        if batch_first:
+            out_variable[i, :length, ...] = variable
+        else:
+            out_variable[:length, i, ...] = variable
+
+    return out_variable
 
 class TED_Rating_Averaged_Dataset(Dataset):
     """TED rating dataset. The pose and face values are averaged."""
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
-            secondThresh=50.,scale_rating=True,posedim=36,facedim=44):
+            secondThresh=50.,scale_rating=True,posedim=36,\
+            facedim=44,worddim=300,modality=['word','pose','face']):
 
         # get ratings
-        self.Y,_,_ = binarized_ratings(firstThresh,\
+        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
@@ -397,8 +420,11 @@ class TED_Rating_Averaged_Dataset(Dataset):
             'TED_feature_openface/openface_sentencewise_features/')
         self.sentpath = os.path.join(ted_data_path,\
             'TED_feature_sentence_boundary/')
+        self.modality = modality
         self.posedim = posedim
         self.facedim = facedim
+        self.worddim = worddim
+        self.dims = posedim + facedim + worddim
 
         # Final check for the existence of all the files.
         all_available = set()
@@ -432,34 +458,69 @@ class TED_Rating_Averaged_Dataset(Dataset):
         for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
                 fillvalue=[]):
             # Average pose per sentence
-            if not apose:
-                apose = np.zeros(self.posedim)
-            else:
-                assert self.posedim == np.size(apose,axis=1)
-                apose = np.nan_to_num(np.nanmean(apose,axis=0))
-            # Average face per sentence
-            if not aface:
-                aface = np.zeros(self.facedim)
-            else:
-                assert self.facedim == np.size(aface,axis=1)
-                aface = np.nan_to_num(np.nanmean(aface,axis=0))
-            # Concatenate pose and face
-            poseface = np.concatenate((apose,aface)).tolist()
-            # Take all words in a sentence
-            allwords=[]
-            nullvec = [0 for i in range(300)]
-            for aword in word_tokenize(asent['sentence']):
-                if aword in self.wvec:
-                    allwords.append(self.wvec[aword]+poseface)
+            if 'pose' in self.modality:
+                if not apose:
+                    apose = np.zeros(self.posedim)
                 else:
-                    allwords.append(nullvec+poseface)
-            outvec.extend(allwords)
-        return {'X':np.reshape(outvec,(-1,1,300+self.posedim+self.facedim)),
-            'Y':self.Y[talkid]}
+                    assert self.posedim == np.size(apose,axis=1)
+                    apose = np.nan_to_num(np.nanmean(apose,axis=0))
+            # Average face per sentence
+            if 'face' in self.modality:
+                if not aface:
+                    aface = np.zeros(self.facedim)
+                else:
+                    assert self.facedim == np.size(aface,axis=1)
+                    aface = np.nan_to_num(np.nanmean(aface,axis=0))
+            # Concatenate pose and face
+            if 'pose' in self.modality and 'face' in self.modality:
+                poseface = np.concatenate((apose,aface)).tolist()
+            elif 'pose' in self.modality:
+                poseface = apose
+            elif 'face' in self.modality:
+                poseface = aface
+            else:
+                poseface = []
 
-class TED_Rating_all_Dataset(TED_Rating_Averaged_Dataset):
+            # Take all words in a sentence
+            if 'word' in self.modality:
+                allwords=[]
+                nullvec = [0 for i in range(self.worddim)]
+                for aword in word_tokenize(asent['sentence']):
+                    if aword in self.wvec:
+                        allwords.append(self.wvec[aword]+poseface)
+                    else:
+                        allwords.append(nullvec+poseface)
+                outvec.extend(allwords)
+            else:
+                outvec.extend([poseface])
+        return {'X':np.array(outvec),'Y':np.reshape(self.Y[talkid],(1,-1)),
+            'ylabel':self.ylabel}
+
+def collate_for_averaged(datalist):
+    '''
+    Pad and pack a list of datapoints obtained from TED_Rating_Averaged_Dataset
+    '''
+    
+    # Packing X 
+    sizelist = [np.size(item['X'],axis=0) for item in datalist]
+    idx = np.argsort([-asize for asize in sizelist])
+    sizelist = [sizelist[i] for i in idx]
+    X_batch = []
+    Y_batch = []
+    for i in idx:
+        X_batch.append(autograd.Variable(torch.from_numpy(datalist[i]['X'])))
+        Y_batch.append(datalist[i]['Y'])
+    padded = __pad_sequence__(X_batch)
+    datapack = pack_padded_sequence(padded,sizelist)
+    # Arranging Y
+    Y_shaped = np.concatenate(Y_batch,axis=0)
+    Ypack = autograd.Variable(torch.from_numpy(Y_shaped))
+    return {'X':datapack,'Y':Ypack}
+
+
+class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
     """
-    TED rating dataset. The sentences, pose and face values are
+    TED rating dataset. The word, pose and face values are
     sent as three different streams.
     """
     def __getitem__(self, idx):
@@ -476,21 +537,23 @@ class TED_Rating_all_Dataset(TED_Rating_Averaged_Dataset):
         pose_stream=[]
         face_stream=[]
         wrd_stream=[]
-        nullwvec = [0 for i in range(300)]
-        nullpvec = [0 for i in range(self.posedim)]
-        nullfvec = [0 for i in range(self.facedim)]
+        nullwvec = [0 for i in range(self.worddim)]
+        nullpvec = [[0 for i in range(self.posedim)]]
+        nullfvec = [[0 for i in range(self.facedim)]]
+        retval = {}
+
         for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
                 fillvalue=[]):
             # Pose
             if not apose:
                 pose_stream.extend(nullpvec)
             else:
-                pose_stream.extend(np.nan_to_num(apose))
+                pose_stream.extend(np.nan_to_num(apose).tolist())
             # Face
             if not aface:
                 face_stream.extend(nullfvec)
             else:
-                face_stream.extend(np.nan_to_num(aface))
+                face_stream.extend(np.nan_to_num(aface).tolist())
             # word
             allwords=[]
             for aword in word_tokenize(asent['sentence']):
@@ -499,11 +562,43 @@ class TED_Rating_all_Dataset(TED_Rating_Averaged_Dataset):
                 else:
                     allwords.append(nullwvec)
             wrd_stream.extend(allwords)
-        pose_stream = np.reshape(pose_stream,(-1,1,self.posedim))
-        face_stream = np.reshape(face_stream,(-1,1,self.facedim))
-        wrd_stream = np.reshape(wrd_stream,(-1,1,300))
-        return {'pose':pose_stream,'face':face_stream,'word':wrd_stream}
+        if 'pose' in modality:
+            retval['pose'] = np.array(pose_stream)
+        if 'face' in modality:
+            retval['face'] = np.array(face_stream)
+        if 'word' in modality:
+            retval['word'] = np.array(wrd_stream)
+        retval['Y'] = np.reshape(self.Y[talkid],(1,-1))
+        retval['ylabel'] = self.ylabel
 
+        return retval
+
+def collate_for_streamed(datalist):
+    '''
+    Pad and pack a list of datapoints obtained from TED_Rating_Streamed_Dataset
+    '''
+    alldata={}
+    Y_batch=[]
+    for j,akey in enumerate(['pose','face','word','Y']): 
+        if not akey in datalist[0]:
+            continue
+        sizelist = [np.size(item[akey],axis=0) for item in datalist]
+        idx = np.argsort([-asize for asize in sizelist])
+        sizelist = [sizelist[i] for i in idx]
+        alldata[akey] = []
+        for i in idx:
+            if akey == 'Y':
+                Y_batch.append(datalist[i]['Y'])
+            else:
+                dattemp = autograd.Variable(torch.from_numpy(datalist[i][akey]))
+                alldata[akey]+=[dattemp]
+        if not akey=='Y':        
+            alldata[akey] = __pad_sequence__(alldata[akey])
+            alldata[akey] = pack_padded_sequence(alldata[akey],sizelist)
+    # Packing Y
+    Y_shaped = np.concatenate(Y_batch,axis=0)
+    alldata['Y'] = autograd.Variable(torch.from_numpy(Y_shaped))
+    return alldata
 
 def main():
     '''

@@ -153,3 +153,100 @@ def train_model(model, feeder,
     # Save the model
     model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
+
+def train_model_for_averaged(modelname='GRU',
+    output_folder = 'SSE_result/',
+    train_test_ratio = 0.85,
+    loss_fn_name = nn.KLDivLoss,
+    optim_fn_name = optim.Adam,
+    learning_rate = 0.01,
+    hidden_dim = 128,
+    model_outfile = 'model_weights.pkl',
+    output_log = 'train_logfile.txt',
+    max_data = np.inf,
+    max_iter = 3):
+    '''
+    Trains a GRU or LSTM model using TED_Rating_Averaged_Dataset
+    '''
+    # Prepare output folder
+    outpath = os.path.join(ted_data_path,output_folder)
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+
+    # Prepare trining and test split
+    train_id,test_id = ttdf.split_train_test(train_test_ratio)
+    
+    
+
+    if modelname == 'GRU':
+        model = nn.GRU()
+    elif modelname == 'LSTM':
+        model = 
+    else:
+        raise IOError('Only GRU or LSTM is accepted')
+
+    # Use sum, not average.
+    loss_fn = loss_fn_name(size_average=False)
+    # Initialize the optimizer
+    optimizer = optim_fn_name(model.parameters(),lr = learning_rate)
+
+    # Save the parameters of the function call. It allows me to audit the models
+    with open(os.path.join(outpath,output_log),'wb') as fparam:
+        fparam.write('sense_dim={}'.format(model.s)+'\n')
+        fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
+        fparam.write('activation={}'.format(model.activation.__repr__())+'\n')
+        fparam.write('final_activation={}'.format(\
+            model.final_activation.__repr__())+'\n')
+        fparam.write('learning_rate={}'.format(learning_rate)+'\n')
+        fparam.write('model_outfile={}'.format(model_outfile)+'\n')
+        fparam.write('gpunum={}'.format(model.gpu)+'\n')
+        fparam.write('Optimizer_name={}'.format(optimizer.__repr__())+'\n')
+        fparam.write('Loss_name={}'.format(loss_fn.__repr__())+'\n')
+        fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
+        fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
+        losslist = []
+        # Iteration
+        for iter in range(max_iter):
+            # Shuffle the training batch
+            np.random.shuffle(train_id)
+            # Loop over one datapoint at a time
+            for i,atalk in enumerate(train_id):
+                if i > max_data:
+                    break
+
+                # Get the input and the ground truth
+                all_deptree,rating_t = feeder(atalk,model.gpu)
+
+                # Clear gradients from previous iterations
+                model.zero_grad()
+                # Forward pass through the model
+                log_probs = model(all_deptree)
+                # Calculate the loss
+                loss = loss_fn(log_probs,rating_t)
+
+                # Backpropagation of the gradients
+                loss.backward()
+                # Parameter update
+                optimizer.step()
+
+                # Logging the current status
+                lossval = loss.data[0]
+
+                # Save the loss in the last iteration
+                # This is to compute the average training loss and the
+                # model performance over the training data.
+                if iter == max_iter - 1:
+                    losslist.append(lossval)
+                # Show status
+                status_msg =  'training:'+str(atalk)+', Loss:'+\
+                    str(lossval)+', iteration:'+str(iter)
+                print status_msg
+                fparam.write(status_msg + '\n')
+        # Write the average loss of last iteration
+        status_msg = 'Average Loss in last iteration:{}\n'.format(np.mean(losslist))
+        print status_msg
+        fparam.write(status_msg)
+    # Save the model
+    model_filename = os.path.join(outpath,model_outfile)
+    torch.save(model.cpu(),open(model_filename,'wb'))
+

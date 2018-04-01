@@ -22,6 +22,7 @@ class multiLinear(nn.Module):
     def forward(self,i,x):
         return torch.matmul(x,self.weight[i,:,:])+self.bias[i]
 
+
 def __def_tensor__(gpunum,listobj):
     '''
     Helper Function.
