@@ -162,7 +162,7 @@ def average_results(result_pklfilename='dev_result.pkl',folder_prefix='run_'):
 
 def tabulate_classical_results(outfile='result_classical.csv'):
     '''
-    Read and tabulate result files for classical experiments
+    Read and tabulate the results in a csv file for classical experiments
     '''
     rating_names = ['beautiful',
                     'ingenious',

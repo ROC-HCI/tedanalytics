@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH -p standard
+#SBATCH --reservation=mtanveer-mar2018 -p reserved
 #SBATCH --mem=4gb
 #SBATCH -c 1
 #SBATCH -a 0-31
@@ -9,5 +9,7 @@
 #SBATCH -e /scratch/mtanveer/output/eval_error%j
 
 module load anaconda
+echo "Job Started"
+echo $SLURM_ARRAY_TASK_ID
 #python ted_talk_deep_learning_experiments.py
 python ted_talk_classical_experiments.py

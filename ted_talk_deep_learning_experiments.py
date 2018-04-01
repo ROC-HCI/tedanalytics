@@ -79,9 +79,9 @@ def exp1_train(sense_dim = 14, outdir = 'run_0/', max_iter = 10,
     # Build the model
     model = model_initiator_fn(reduced_val,sense_dim=sense_dim,gpunum=gpunum)
     # Train model
-    ttt.train_model(model, ttdf.__tree_rating_feeder__, outdir, train_test_ratio,
-        loss_fn_name, optim_fn_name, learning_rate, model_outfile,
-        output_log, max_data, max_iter)
+    ttt.train_model(model, ttdf.__tree_rating_feeder__, outdir, 
+        train_test_ratio, loss_fn_name, optim_fn_name, learning_rate,
+        model_outfile, output_log, max_data, max_iter)
     print 'Training time:',time.time() - start_time
 
 

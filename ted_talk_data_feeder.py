@@ -5,6 +5,8 @@ import csv
 import cPickle as cp
 import numpy as np
 import scipy as sp
+from itertools import izip_longest
+from nltk.tokenize import word_tokenize
 
 import ted_talk_makeindex
 import list_of_talks as lst_talks
@@ -14,6 +16,7 @@ from TED_data_location import ted_data_path, wordvec_path
 
 import torch
 import torch.autograd as autograd
+from torch.utils.data import Dataset, DataLoader
 
 def split_train_test(train_ratio=0.8,talklist=lst_talks.all_valid_talks):
     '''
@@ -369,6 +372,138 @@ def __tree_rating_feeder__(atalk,gpunum=-1):
         with torch.cuda.device(gpunum):
             rating_t = autograd.Variable(torch.cuda.FloatTensor(y))
     return all_deptree,rating_t.view(1,-1)
+
+
+class TED_Rating_Averaged_Dataset(Dataset):
+    """TED rating dataset. The pose and face values are averaged."""
+
+    def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
+            secondThresh=50.,scale_rating=True,posedim=36,facedim=44):
+
+        # get ratings
+        self.Y,_,_ = binarized_ratings(firstThresh,\
+            secondThresh,scale_rating)
+        # Indices of the data in the dataset
+        self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
+
+        # Other important information for the dataset
+        print 'reading word vectors'
+        self.wvec = read_crop_glove()
+        print 'reading ratings'
+        self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
+        self.posepath = os.path.join(ted_data_path,\
+            'TED_feature_openpose/openpose_sentencewise_features/')
+        self.facepath = os.path.join(ted_data_path,\
+            'TED_feature_openface/openface_sentencewise_features/')
+        self.sentpath = os.path.join(ted_data_path,\
+            'TED_feature_sentence_boundary/')
+        self.posedim = posedim
+        self.facedim = facedim
+
+        # Final check for the existence of all the files.
+        all_available = set()
+        print 'Checking indices'
+        for atalk in self.data_indices:
+            posefile = os.path.join(self.posepath,str(atalk)+'.pkl')
+            facefile = os.path.join(self.facepath,str(atalk)+'.pkl')
+            sentfile = os.path.join(self.sentpath,str(atalk)+'.pkl')
+            if os.path.exists(posefile) and os.path.exists(facefile) \
+                and os.path.exists(sentfile):
+                all_available.add(atalk)
+        # Remove indices that are not all available
+        self.data_indices = list(all_available.intersection(self.data_indices))
+
+        
+    def __len__(self):
+        return len(self.data_indices)
+
+    def __getitem__(self, idx):
+        '''
+        Given a data index (not videoid), get the corresponding data
+        '''
+        talkid = self.data_indices[idx]
+        posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
+        facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
+        facedat = facedat[0]
+        sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
+        sentdat = sentdat['sentences']
+
+        outvec=[]
+        for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
+                fillvalue=[]):
+            # Average pose per sentence
+            if not apose:
+                apose = np.zeros(self.posedim)
+            else:
+                assert self.posedim == np.size(apose,axis=1)
+                apose = np.nan_to_num(np.nanmean(apose,axis=0))
+            # Average face per sentence
+            if not aface:
+                aface = np.zeros(self.facedim)
+            else:
+                assert self.facedim == np.size(aface,axis=1)
+                aface = np.nan_to_num(np.nanmean(aface,axis=0))
+            # Concatenate pose and face
+            poseface = np.concatenate((apose,aface)).tolist()
+            # Take all words in a sentence
+            allwords=[]
+            nullvec = [0 for i in range(300)]
+            for aword in word_tokenize(asent['sentence']):
+                if aword in self.wvec:
+                    allwords.append(self.wvec[aword]+poseface)
+                else:
+                    allwords.append(nullvec+poseface)
+            outvec.extend(allwords)
+        return {'X':np.reshape(outvec,(-1,1,300+self.posedim+self.facedim)),
+            'Y':self.Y[talkid]}
+
+class TED_Rating_all_Dataset(TED_Rating_Averaged_Dataset):
+    """
+    TED rating dataset. The sentences, pose and face values are
+    sent as three different streams.
+    """
+    def __getitem__(self, idx):
+        '''
+        Given a data index (not videoid), get the corresponding data
+        '''
+        talkid = self.data_indices[idx]
+        posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
+        facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
+        facedat = facedat[0]
+        sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
+        sentdat = sentdat['sentences']
+
+        pose_stream=[]
+        face_stream=[]
+        wrd_stream=[]
+        nullwvec = [0 for i in range(300)]
+        nullpvec = [0 for i in range(self.posedim)]
+        nullfvec = [0 for i in range(self.facedim)]
+        for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
+                fillvalue=[]):
+            # Pose
+            if not apose:
+                pose_stream.extend(nullpvec)
+            else:
+                pose_stream.extend(np.nan_to_num(apose))
+            # Face
+            if not aface:
+                face_stream.extend(nullfvec)
+            else:
+                face_stream.extend(np.nan_to_num(aface))
+            # word
+            allwords=[]
+            for aword in word_tokenize(asent['sentence']):
+                if aword in self.wvec:
+                    allwords.append(self.wvec[aword])
+                else:
+                    allwords.append(nullwvec)
+            wrd_stream.extend(allwords)
+        pose_stream = np.reshape(pose_stream,(-1,1,self.posedim))
+        face_stream = np.reshape(face_stream,(-1,1,self.facedim))
+        wrd_stream = np.reshape(wrd_stream,(-1,1,300))
+        return {'pose':pose_stream,'face':face_stream,'word':wrd_stream}
+
 
 def main():
     '''
