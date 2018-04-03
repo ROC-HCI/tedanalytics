@@ -4,9 +4,6 @@ import json
 import glob
 import numpy as np
 import cPickle as cp
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 import torch
 import torch.autograd as autograd
@@ -154,99 +151,138 @@ def train_model(model, feeder,
     model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
 
-def train_model_for_averaged(modelname='GRU',
-    output_folder = 'SSE_result/',
-    train_test_ratio = 0.85,
-    loss_fn_name = nn.KLDivLoss,
-    optim_fn_name = optim.Adam,
-    learning_rate = 0.01,
+def train_recurrent_models(
+    dataset_type = 'averaged',
+    firstThresh = 50.,
+    secondThresh = 50.,
+    scale_rating = True,
+    minibatch_size = 3,
     hidden_dim = 128,
-    model_outfile = 'model_weights.pkl',
-    output_log = 'train_logfile.txt',
-    max_data = np.inf,
-    max_iter = 3):
+    modality=['word','audio','pose','face'],
+    output_folder = 'TED_stats/',
+    train_test_ratio = 0.85,
+    learning_rate = 0.01,
+    max_iter_over_dataset = 20,
+    GPUnum = 0):
     '''
     Trains a GRU or LSTM model using TED_Rating_Averaged_Dataset
     '''
+    old_time = time.time()
     # Prepare output folder
     outpath = os.path.join(ted_data_path,output_folder)
     if not os.path.exists(outpath):
         os.makedirs(outpath)
+    output_log = 'LSTM_log_{0}_{1}_{2}_{3}_{4}_{5}_{6}.txt'.format(dataset_type,\
+        scale_rating,''.join([m[0] for m in modality]),\
+        firstThresh,secondThresh,hidden_dim,max_iter_over_dataset)
+    outlogfile = os.path.join(outpath,output_log)
+    model_filename = os.path.join(outpath,output_log.replace('LSTM_log',
+        'LSTM_').replace('.txt','.model'))
 
     # Prepare trining and test split
     train_id,test_id = ttdf.split_train_test(train_test_ratio)
-    
-    
+    if dataset_type == 'averaged':
+        train_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=train_id,
+            firstThresh = firstThresh, secondThresh = secondThresh,
+            scale_rating = scale_rating,modality=modality)
+    elif dataset_type == 'streamed':
+        train_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=train_id,
+            firstThresh = firstThresh, secondThresh = secondThresh,
+            scale_rating = scale_rating,modality=modality)
 
-    if modelname == 'GRU':
-        model = nn.GRU()
-    elif modelname == 'LSTM':
-        model = 
-    else:
-        raise IOError('Only GRU or LSTM is accepted')
+    # Constructing minibaches
+    minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
+        minibatch_size,GPUnum)
+    train_datalen = len(train_dataset)
+    print 'Dataset Length:',train_datalen
 
-    # Use sum, not average.
-    loss_fn = loss_fn_name(size_average=False)
+    # Build the model
+    model = ttm.LSTM_TED_Rating_Predictor_Averaged(
+        train_dataset.dims,hidden_dim,len(train_dataset.ylabel),GPUnum)
+    ttdf.gputize(model,GPUnum)
+
+    # lossfunction
+    loss_fn = nn.NLLLoss()
     # Initialize the optimizer
-    optimizer = optim_fn_name(model.parameters(),lr = learning_rate)
+    optimizer = optim.Adam(model.parameters(),lr = learning_rate)
+    # Training time
+    model.train()
 
+    # Training loop
+    data_count = 0
+    losslist=[]
     # Save the parameters of the function call. It allows me to audit the models
-    with open(os.path.join(outpath,output_log),'wb') as fparam:
-        fparam.write('sense_dim={}'.format(model.s)+'\n')
+    with open(outlogfile,'wb') as fparam:
+        fparam.write('dataset_type={}'.format(dataset_type)+'\n')
+        fparam.write('scale_rating={}'.format(scale_rating)+'\n')
+        fparam.write('firstThresh={}'.format(firstThresh)+'\n')
+        fparam.write('secondThresh={}'.format(secondThresh)+'\n')
+        fparam.write('sense_dim={}'.format(hidden_dim)+'\n')
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
-        fparam.write('activation={}'.format(model.activation.__repr__())+'\n')
-        fparam.write('final_activation={}'.format(\
-            model.final_activation.__repr__())+'\n')
         fparam.write('learning_rate={}'.format(learning_rate)+'\n')
-        fparam.write('model_outfile={}'.format(model_outfile)+'\n')
-        fparam.write('gpunum={}'.format(model.gpu)+'\n')
-        fparam.write('Optimizer_name={}'.format(optimizer.__repr__())+'\n')
-        fparam.write('Loss_name={}'.format(loss_fn.__repr__())+'\n')
+        fparam.write('model_outfile={}'.format(model_filename)+'\n')
+        fparam.write('gpunum={}'.format(GPUnum)+'\n')
+        fparam.write('modality={}'.format(json.dumps(modality))+'\n')
         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
-        losslist = []
-        # Iteration
-        for iter in range(max_iter):
-            # Shuffle the training batch
-            np.random.shuffle(train_id)
-            # Loop over one datapoint at a time
-            for i,atalk in enumerate(train_id):
-                if i > max_data:
-                    break
+        while True:
+            # form minibatch
+            minibatch = minibatch_iter.next()
 
-                # Get the input and the ground truth
-                all_deptree,rating_t = feeder(atalk,model.gpu)
-
+            # Multiple run on a minibatch
+            for i_ in range(5):
                 # Clear gradients from previous iterations
                 model.zero_grad()
+
                 # Forward pass through the model
-                log_probs = model(all_deptree)
+                log_probs = model(minibatch)
+
                 # Calculate the loss
-                loss = loss_fn(log_probs,rating_t)
+                loss = __compute_loss__(log_probs,minibatch,loss_fn)
 
                 # Backpropagation of the gradients
+                lossval = loss.clone()
                 loss.backward()
                 # Parameter update
                 optimizer.step()
 
-                # Logging the current status
-                lossval = loss.data[0]
-
-                # Save the loss in the last iteration
-                # This is to compute the average training loss and the
-                # model performance over the training data.
-                if iter == max_iter - 1:
-                    losslist.append(lossval)
-                # Show status
-                status_msg =  'training:'+str(atalk)+', Loss:'+\
-                    str(lossval)+', iteration:'+str(iter)
-                print status_msg
-                fparam.write(status_msg + '\n')
+            # Logging the current status
+            data_count += len(minibatch)
+            ratio_trained = float(data_count)/float(train_datalen)
+            if ratio_trained > max_iter_over_dataset:
+                break
+            lossval=lossval.cpu()
+            lossval = lossval.data[0]
+            if ratio_trained > 1:
+                losslist.append(lossval)
+            status_msg =  'training: ,'+' Loss:'+\
+                str(lossval)+', iteration percent:'+str(ratio_trained*100)
+            print status_msg
+            fparam.write(status_msg + '\n')
+        
         # Write the average loss of last iteration
-        status_msg = 'Average Loss in last iteration:{}\n'.format(np.mean(losslist))
+        status_msg = 'Average Loss after first iteration through dataset:{}\n'\
+            .format(np.nanmean(losslist))
         print status_msg
         fparam.write(status_msg)
+        fparam.write('Time:'+str(time.time() - old_time)+'\n')
+    print 'Total time:',time.time() - old_time
+
     # Save the model
-    model_filename = os.path.join(outpath,model_outfile)
     torch.save(model.cpu(),open(model_filename,'wb'))
 
+
+def __compute_loss__(log_probs,minibatch,loss_fn):
+    loss = None
+    for i,an_item in enumerate(minibatch):
+        label = an_item['Y'].view(-1)
+        if i==0:
+            loss = loss_fn(log_probs[i],label)
+        else:
+            loss = torch.cat((loss,loss_fn(log_probs[i],label)),dim=0)    
+    loss = torch.mean(loss)
+    return loss
+
+
+if __name__=='__main__':
+    train_recurrent_models()

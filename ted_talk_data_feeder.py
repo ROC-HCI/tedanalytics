@@ -15,8 +15,8 @@ import ted_talk_lexical_feature_processor as lex
 from TED_data_location import ted_data_path, wordvec_path
 
 import torch
-import torch.autograd as autograd
-from torch.utils.data import Dataset
+from torch.autograd import Variable
+from torch.utils.data import Dataset, DataLoader 
 from torch.nn.utils.rnn import pack_padded_sequence
 
 def split_train_test(train_ratio=0.8,talklist=lst_talks.all_valid_talks):
@@ -177,8 +177,35 @@ def read_prosody_feat(talklist=lst_talks.all_valid_talks,
             data['pitch'].values()+\
             [data['formant'][akey][i] for akey in \
                     data['formant'].keys() for i in range(5)]
-
     return X, labels
+
+def read_prosody_per_sentence(atalk,
+    foldername = 'TED_feature_prosody/per_sentence'):
+    '''
+    Reads the prosody features for each sentence in a given talk id
+    '''
+    pathname = os.path.join(ted_data_path,foldername)
+    pklname = os.path.join(pathname,str(atalk)+'.pkl')
+    X=[]    
+    if not os.path.exists(pklname):
+        raise IOError('Not found'+str(atalk))
+    labels = None
+    for data in cp.load(open(pklname))['sentences']:
+        if not data['intensity'] or not data['formant'] or not data['pitch']:
+            X.append([])
+            continue
+        if not labels:
+            labels = ['intensity_'+akey for akey in data['intensity'].keys()]+\
+                ['pitch_'+akey for akey in data['pitch'].keys()]+\
+                ['formant_'+akey+'_'+str(i) for akey in \
+                    data['formant'].keys() for i in range(5)]
+        asent = data['intensity'].values()+\
+            data['pitch'].values()+\
+            [data['formant'][akey][i] for akey in \
+                    data['formant'].keys() for i in range(5)]
+        X.append(asent)
+    return X, labels
+
 
 def read_lexical_feat(talklist=lst_talks.all_valid_talks,
     feature_file = 'misc/lexical.csv'):
@@ -368,10 +395,10 @@ def __tree_rating_feeder__(atalk,gpunum=-1):
     all_deptree,y,_ = get_dep_rating(atalk)
     # Construct ground truth tensor
     if gpunum < 0:
-        rating_t = autograd.Variable(torch.FloatTensor(y))
+        rating_t = Variable(torch.FloatTensor(y))
     else:
         with torch.cuda.device(gpunum):
-            rating_t = autograd.Variable(torch.cuda.FloatTensor(y))
+            rating_t = Variable(torch.cuda.FloatTensor(y))
     return all_deptree,rating_t.view(1,-1)
 
 def __pad_sequence__(sequences, batch_first=False, padding_value=0):
@@ -383,7 +410,7 @@ def __pad_sequence__(sequences, batch_first=False, padding_value=0):
     else:
         out_dims = (max_len, len(sequences)) + trailing_dims
 
-    out_variable = autograd.Variable(sequences[0].data.new(*out_dims).fill_(padding_value))
+    out_variable = Variable(sequences[0].data.new(*out_dims).fill_(padding_value))
     for i, variable in enumerate(sequences):
         length = variable.size(0)
         if prev_l < length:
@@ -396,12 +423,48 @@ def __pad_sequence__(sequences, batch_first=False, padding_value=0):
 
     return out_variable
 
+def gputize(input,gpuNum):
+    '''
+    Put torch elements to GPU if necessary
+    '''
+    if gpuNum>=0:
+        return input.cuda(gpuNum)
+    else:
+        return input
+
+def variablize(input,gpuNum):
+    '''
+    Turn numpy to variable. put to gpu if necessary
+    '''
+    if gpuNum>=0:
+        return Variable(torch.from_numpy(input).cuda(gpuNum))
+    else:
+        return Variable(torch.from_numpy(input))
+
+def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
+    '''
+    Iterator for a shuffled and variablized minibatch.
+    '''
+    m = len(dataset)
+    minibatch_size = min(minibatch_size,m)
+    idx = np.arange(m)
+    while True:
+        np.random.shuffle(idx)
+        for i in range(0,len(idx),minibatch_size):
+            batch = []
+            # TODO: Ideal candidate for parallelization
+            for j in range(i,i+minibatch_size):
+                adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
+                    for akey in datakeys}
+                batch.append(adata)
+            yield batch
+
 class TED_Rating_Averaged_Dataset(Dataset):
     """TED rating dataset. The pose and face values are averaged."""
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
-            secondThresh=50.,scale_rating=True,posedim=36,\
-            facedim=44,worddim=300,modality=['word','pose','face']):
+            secondThresh=50.,scale_rating=True,posedim=36,prosodydim=49,\
+            facedim=44,worddim=300,modality=['word','pose','face','audio']):
 
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
@@ -420,11 +483,23 @@ class TED_Rating_Averaged_Dataset(Dataset):
             'TED_feature_openface/openface_sentencewise_features/')
         self.sentpath = os.path.join(ted_data_path,\
             'TED_feature_sentence_boundary/')
+        self.prospath = os.path.join(ted_data_path,\
+            'TED_feature_prosody/per_sentence')
         self.modality = modality
         self.posedim = posedim
+        self.prosdim = prosodydim
         self.facedim = facedim
         self.worddim = worddim
-        self.dims = posedim + facedim + worddim
+
+        self.dims = 0
+        if 'pose' in self.modality:
+            self.dims += posedim
+        if 'face' in self.modality:
+            self.dims += facedim
+        if 'word' in self.modality:
+            self.dims += worddim
+        if 'audio' in self.modality:
+            self.dims += prosodydim
 
         # Final check for the existence of all the files.
         all_available = set()
@@ -433,11 +508,13 @@ class TED_Rating_Averaged_Dataset(Dataset):
             posefile = os.path.join(self.posepath,str(atalk)+'.pkl')
             facefile = os.path.join(self.facepath,str(atalk)+'.pkl')
             sentfile = os.path.join(self.sentpath,str(atalk)+'.pkl')
+            prosfile = os.path.join(self.prospath,str(atalk)+'.pkl')
             if os.path.exists(posefile) and os.path.exists(facefile) \
-                and os.path.exists(sentfile):
+                and os.path.exists(sentfile) and os.path.exists(prosfile):
                 all_available.add(atalk)
         # Remove indices that are not all available
         self.data_indices = list(all_available.intersection(self.data_indices))
+        print 'Dataset Ready'
 
         
     def __len__(self):
@@ -453,33 +530,44 @@ class TED_Rating_Averaged_Dataset(Dataset):
         facedat = facedat[0]
         sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
         sentdat = sentdat['sentences']
+        prosdat,_ = read_prosody_per_sentence(talkid)
 
         outvec=[]
-        for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
-                fillvalue=[]):
+        # Second best candidate for data parallelization. CPU multithreading/
+        for asent,aface,apose,apros in izip_longest(sentdat,facedat,\
+                posedat,prosdat,fillvalue=[]):
             # Average pose per sentence
             if 'pose' in self.modality:
                 if not apose:
                     apose = np.zeros(self.posedim)
                 else:
                     assert self.posedim == np.size(apose,axis=1)
-                    apose = np.nan_to_num(np.nanmean(apose,axis=0))
+                    apose = np.nanmean(np.nan_to_num(apose),axis=0)
             # Average face per sentence
             if 'face' in self.modality:
                 if not aface:
                     aface = np.zeros(self.facedim)
                 else:
                     assert self.facedim == np.size(aface,axis=1)
-                    aface = np.nan_to_num(np.nanmean(aface,axis=0))
-            # Concatenate pose and face
+                    aface = np.nanmean(np.nan_to_num(aface),axis=0)
+            # Average, std, skew, kartosys of prosody per sentence
+            if 'audio' in self.modality:
+                if not apros:
+                    apros = np.zeros(self.prosdim)
+                else:
+                    apros = np.nan_to_num(apros)
+
+            # Concatenate pose and face and prosody
             if 'pose' in self.modality and 'face' in self.modality:
-                poseface = np.concatenate((apose,aface)).tolist()
+                nonverbal = np.concatenate((apose,aface,apros)).tolist()
             elif 'pose' in self.modality:
-                poseface = apose
+                nonverbal = apose
             elif 'face' in self.modality:
-                poseface = aface
+                nonverbal = aface
+            elif 'audio' in self.modality:
+                nonverbal = apros
             else:
-                poseface = []
+                nonverbal = []
 
             # Take all words in a sentence
             if 'word' in self.modality:
@@ -487,36 +575,50 @@ class TED_Rating_Averaged_Dataset(Dataset):
                 nullvec = [0 for i in range(self.worddim)]
                 for aword in word_tokenize(asent['sentence']):
                     if aword in self.wvec:
-                        allwords.append(self.wvec[aword]+poseface)
+                        allwords.append(self.wvec[aword]+nonverbal)
                     else:
-                        allwords.append(nullvec+poseface)
+                        allwords.append(nullvec+nonverbal)
                 outvec.extend(allwords)
             else:
-                outvec.extend([poseface])
-        return {'X':np.array(outvec),'Y':np.reshape(self.Y[talkid],(1,-1)),
-            'ylabel':self.ylabel}
+                outvec.extend([nonverbal])
+        # Note: This is T x * (not T x B (batch = 1) x *
+        # Because the collate function needs in this form for
+        # pad_sequence
+        xval = np.array(outvec).astype(np.float32)
+
+        yval = np.reshape([1 if alab == 1 else 0 for alab in \
+            self.Y[talkid]],(1,-1)).astype(np.int64)
+        return {'X':xval,'Y':yval,'ylabel':self.ylabel}
 
 def collate_for_averaged(datalist):
     '''
     Pad and pack a list of datapoints obtained from TED_Rating_Averaged_Dataset
     '''
-    
     # Packing X 
     sizelist = [np.size(item['X'],axis=0) for item in datalist]
     idx = np.argsort([-asize for asize in sizelist])
     sizelist = [sizelist[i] for i in idx]
     X_batch = []
     Y_batch = []
+    # Sorting based on size
     for i in idx:
-        X_batch.append(autograd.Variable(torch.from_numpy(datalist[i]['X'])))
+        X_batch.append(Variable(torch.from_numpy(datalist[i]['X'])))
         Y_batch.append(datalist[i]['Y'])
+    # Padded the data dimension is T x B (batchsize) x *
     padded = __pad_sequence__(X_batch)
+    # Datapack might give a wrong impression of dimension but its ok
     datapack = pack_padded_sequence(padded,sizelist)
     # Arranging Y
     Y_shaped = np.concatenate(Y_batch,axis=0)
-    Ypack = autograd.Variable(torch.from_numpy(Y_shaped))
-    return {'X':datapack,'Y':Ypack}
+    Y = Variable(torch.from_numpy(Y_shaped))
+    return {'X':datapack,'Y':Y}
 
+# def get_data_iter_averaged(set1,batch_size=4,shuffle=True,
+#         num_workers=4,collate_fn=collate_for_averaged,
+#         pin_memory=False):
+#     dataiter = DataLoader(set1,batch_size=batch_size,shuffle=shuffle,
+#         num_workers=num_workers,collate_fn=collate_fn)
+#     return dataiter
 
 class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
     """
@@ -562,13 +664,16 @@ class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
                 else:
                     allwords.append(nullwvec)
             wrd_stream.extend(allwords)
-        if 'pose' in modality:
-            retval['pose'] = np.array(pose_stream)
-        if 'face' in modality:
-            retval['face'] = np.array(face_stream)
-        if 'word' in modality:
-            retval['word'] = np.array(wrd_stream)
-        retval['Y'] = np.reshape(self.Y[talkid],(1,-1))
+        # Selectively add modalities
+        if 'pose' in self.modality:
+            retval['pose'] = np.array(pose_stream).astype(np.float32)
+        if 'face' in self.modality:
+            retval['face'] = np.array(face_stream).astype(np.float32)
+        if 'word' in self.modality:
+            retval['word'] = np.array(wrd_stream).astype(np.float32)
+        # Target
+        retval['Y'] = yval = np.reshape([1 if alab == 1 else 0 \
+            for alab in self.Y[talkid]],(1,-1)).astype(np.int64)
         retval['ylabel'] = self.ylabel
 
         return retval
@@ -590,15 +695,22 @@ def collate_for_streamed(datalist):
             if akey == 'Y':
                 Y_batch.append(datalist[i]['Y'])
             else:
-                dattemp = autograd.Variable(torch.from_numpy(datalist[i][akey]))
+                dattemp = Variable(torch.from_numpy(datalist[i][akey]))
                 alldata[akey]+=[dattemp]
         if not akey=='Y':        
             alldata[akey] = __pad_sequence__(alldata[akey])
             alldata[akey] = pack_padded_sequence(alldata[akey],sizelist)
     # Packing Y
     Y_shaped = np.concatenate(Y_batch,axis=0)
-    alldata['Y'] = autograd.Variable(torch.from_numpy(Y_shaped))
+    alldata['Y'] = Variable(torch.from_numpy(Y_shaped))
     return alldata
+
+def get_data_iter_streamed(set2,batch_size=4,shuffle=True,
+        num_workers=4,collate_fn=collate_for_streamed,
+        pin_memory=False):
+    dataiter = DataLoader(set2,batch_size=batch_size,shuffle=shuffle,
+        num_workers=num_workers,collate_fn=collate_fn)
+    return dataiter
 
 def main():
     '''

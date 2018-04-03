@@ -1,14 +1,15 @@
 import torch
-import torch.autograd as autograd
+from torch.autograd import Variable 
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 import torch.optim as optim
-import ted_talk_data_feeder as ttdf
+from torch.nn.utils.rnn import pad_packed_sequence
 
 import time
 import numpy as np
 from TED_data_location import ted_data_path, wordvec_path
+import ted_talk_data_feeder as ttdf
 
 class multiLinear(nn.Module):
     '''
@@ -32,10 +33,67 @@ def __def_tensor__(gpunum,listobj):
     http://pytorch.org/docs/0.3.1/notes/cuda.html#memory-management
     '''
     if gpunum < 0:
-        return autograd.Variable(torch.Tensor([listobj]))
+        return Variable(torch.Tensor([listobj]))
     else:
         with torch.cuda.device(gpunum):
-            return autograd.Variable(torch.cuda.FloatTensor([listobj]))        
+            return Variable(torch.cuda.FloatTensor([listobj]))        
+
+class LSTM_custom(nn.Module):
+    def __init__(self,input_dim,hidden_dim):
+        super(LSTM_custom,self).__init__()
+        self.W_xi = nn.Linear(input_dim,hidden_dim)
+        self.W_hi = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xf = nn.Linear(input_dim,hidden_dim)
+        self.W_hf = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xg = nn.Linear(input_dim,hidden_dim)
+        self.W_hg = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xo = nn.Linear(input_dim,hidden_dim)
+        self.W_ho = nn.Linear(hidden_dim,hidden_dim)
+
+    def forward(self,x,h,c):
+        i = F.sigmoid(self.W_xi(x) + self.W_hi(h))
+        f = F.sigmoid(self.W_xf(x) + self.W_hf(h))
+        g = F.tanh(self.W_xg(x) + self.W_hg(h))
+        o = F.sigmoid(self.W_xo(x)+self.W_ho(h))
+        c_ = f*c + i*g
+        h_ = o * F.tanh(c_)
+        return h_,c_
+
+class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
+
+    def __init__(self, input_dim, hidden_dim, output_dim, gpuNum=-1):
+        super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()
+        self.hidden_dim = hidden_dim
+        #self.lstm = nn.LSTMCell(input_dim, hidden_dim)
+        self.lstm = LSTM_custom(input_dim, hidden_dim)
+        self.linear_rat1 = nn.Linear(hidden_dim, output_dim)
+        self.linear_rat2 = nn.Linear(hidden_dim, output_dim)
+        self.gpuNum = gpuNum
+        self.hidden_0 = self.init_hidden() 
+
+
+    def init_hidden(self):
+        nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
+        return (ttdf.variablize(nullvec.copy(),self.gpuNum),
+                ttdf.variablize(nullvec.copy(),self.gpuNum))
+
+    def forward(self, minibatch):
+        outrating = []
+        for an_item in minibatch:
+            # Feed through LSTM
+            for i,an_input in enumerate(an_item['X']):                
+                if i==0:
+                    # set the first hidden
+                    hx, cx = self.lstm(an_input,*self.hidden_0)
+                else:
+                    hx, cx = self.lstm(an_input, hx,cx)
+            # Feed through Linear
+            rat_layer1 = self.linear_rat1(hx).view(-1,1)
+            rat_layer2 = self.linear_rat2(hx).view(-1,1)
+            rat_layer = torch.cat((rat_layer1,rat_layer2),dim=1)            
+            rat_scores = F.log_softmax(rat_layer, dim=1)
+            outrating.append(rat_scores)
+        return outrating
 
 class SyntacticSemanticEngine(nn.Module):
     '''
@@ -258,18 +316,18 @@ class RevisedTreeEncoder(nn.Module):
             self.wvec_init = self.wvec_init.cuda(self.gpu)
             self.hin_init = self.hin_init.cuda(self.gpu)
             # Preallocate pos and dep dicts in a torch-preferred format
-            self.dep_dict = {key:autograd.Variable(\
+            self.dep_dict = {key:Variable(\
                 torch.LongTensor([val])).cuda(self.gpu) for \
                 key,val in dep_dict.items()}
-            self.pos_dict = {key:autograd.Variable(\
+            self.pos_dict = {key:Variable(\
                 torch.LongTensor([val])).cuda(self.gpu) for \
                 key,val in pos_dict.items()}
             self.glove_tensor = self.glove_tensor.cuda(self.gpu)
         else:
             # Preallocate pos and dep dicts in a torch-preferred format
-            self.dep_dict = {key:autograd.Variable(\
+            self.dep_dict = {key:Variable(\
                     torch.LongTensor([val])) for key,val in dep_dict.items()}
-            self.pos_dict = {key:autograd.Variable(\
+            self.pos_dict = {key:Variable(\
                     torch.LongTensor([val])) for key,val in pos_dict.items()}
         
         # Set activations
@@ -302,7 +360,7 @@ class RevisedTreeEncoder(nn.Module):
                 wpart_count+=1
         # Final wordvector
         wvec = wpart_sum/float(wpart_count) if wpart_count>0 else wpart_sum
-        return autograd.Variable(wvec)
+        return Variable(wvec)
 
     def __process_node__(self,w,p,d,hin):
         '''
@@ -338,7 +396,7 @@ class RevisedTreeEncoder(nn.Module):
                     hin = self.encodetree(atree[i+1])
                 else:
                     # This node doesn't have any child. set hin to zero
-                    hin = autograd.Variable(self.hin_init)
+                    hin = Variable(self.hin_init)
                 # Compute the current node
                 w,p,d = anode.strip().encode('ascii','ignore').split()
                 hout = self.__process_node__(w,p,d,hin)
@@ -435,7 +493,7 @@ def __test_encodetree_revisedModel__():
         GPUnum=-1,sensedim=3,output_dim=2)
     optimizer = optim.Adam(model.parameters(),lr = 0.01)
     loss_fn = nn.KLDivLoss(size_average=False)
-    gt = autograd.Variable(torch.Tensor([[0,1]]))
+    gt = Variable(torch.Tensor([[0,1]]))
     # Training loop
     for iter in range(1000):
         model.zero_grad()
@@ -468,7 +526,7 @@ def __test_encodetree_revisedModel_GPU__():
         GPUnum=0,sensedim=3,output_dim=2)
     optimizer = optim.Adam(model.parameters(),lr = 0.01)
     loss_fn = nn.KLDivLoss(size_average=False)
-    gt = autograd.Variable(torch.Tensor([[0,1]])).cuda(0)
+    gt = Variable(torch.Tensor([[0,1]])).cuda(0)
     # Training loop
     for iter in range(1000):
         model.zero_grad()
@@ -543,9 +601,9 @@ def __test_with_multiLinear__(gpunum=-1,nb_input = 3000,inp_dim = 300,
             y2_batch = y2_batch.cuda(gpunum)
 
         # Put to Variable
-        X_batch = autograd.Variable(X_batch)
-        y1_batch = autograd.Variable(y1_batch)
-        y2_batch = autograd.Variable(y2_batch)
+        X_batch = Variable(X_batch)
+        y1_batch = Variable(y1_batch)
+        y2_batch = Variable(y2_batch)
         
         # Remove previous gradients
         model.zero_grad()
