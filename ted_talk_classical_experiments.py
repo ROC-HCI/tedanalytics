@@ -881,8 +881,8 @@ def put_in_bluehive():
     # {'classifier':'logistic_l1','c_scale':2.5000,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':30.,'upperthresh_Y':70.},
     # {'classifier':'logistic_l1','c_scale':3.0000,'nb_tr_iter':100,'scale_rating':True,'lowerthresh_Y':30.,'upperthresh_Y':70.}]
 
-# Run 8
-params = [
+    # Run 8
+    params = [
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'modality':['pose']},
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'modality':['face']},
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'modality':['trajectory']},
@@ -922,8 +922,8 @@ params = [
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'lowerthresh_Y':30.,'upperthresh_Y':70.,'modality':['pose','trajectory','audio','lexical']},
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'lowerthresh_Y':30.,'upperthresh_Y':70.,'modality':['pose','face','audio','lexical']},
     {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'lowerthresh_Y':30.,'upperthresh_Y':70.,'modality':['pose','face','trajectory','lexical']},
-    {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'lowerthresh_Y':30.,'upperthresh_Y':70.,'modality':['pose','face','trajectory','audio']}
-]
+    {'classifier':'logistic_l1','c_scale':0.1,'nb_tr_iter':100,'lowerthresh_Y':30.,'upperthresh_Y':70.,'modality':['pose','face','trajectory','audio']}]
+    
     if not 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'Must run as job array in Bluehive'
         return
