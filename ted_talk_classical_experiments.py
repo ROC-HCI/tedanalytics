@@ -884,6 +884,8 @@ def put_in_bluehive():
     if not 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'Must run as job array in Bluehive'
         return
+    print 'Job Index:',os.environ['SLURM_ARRAY_TASK_ID']
+    print 'Parameter_Length:',len(params)
     classify_multimodal(**params[int(os.environ['SLURM_ARRAY_TASK_ID'])])
 
 
