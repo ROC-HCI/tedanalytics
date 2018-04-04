@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import csv
+import threading
 import cPickle as cp
 import numpy as np
 import scipy as sp
@@ -459,6 +460,7 @@ def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
                 batch.append(adata)
             yield batch
 
+
 class TED_Rating_Averaged_Dataset(Dataset):
     """TED rating dataset. The pose and face values are averaged."""
 
@@ -533,7 +535,7 @@ class TED_Rating_Averaged_Dataset(Dataset):
         prosdat,_ = read_prosody_per_sentence(talkid)
 
         outvec=[]
-        # Second best candidate for data parallelization. CPU multithreading/
+        # Second best candidate for data parallelization. CPU multithreading
         for asent,aface,apose,apros in izip_longest(sentdat,facedat,\
                 posedat,prosdat,fillvalue=[]):
             # Average pose per sentence

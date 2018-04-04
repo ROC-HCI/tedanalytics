@@ -230,21 +230,21 @@ def train_recurrent_models(
             minibatch = minibatch_iter.next()
 
             # Multiple run on a minibatch
-            for i_ in range(5):
-                # Clear gradients from previous iterations
-                model.zero_grad()
+            # for i_ in range(5):
+            # Clear gradients from previous iterations
+            model.zero_grad()
 
-                # Forward pass through the model
-                log_probs = model(minibatch)
+            # Forward pass through the model
+            log_probs = model(minibatch)
 
-                # Calculate the loss
-                loss = __compute_loss__(log_probs,minibatch,loss_fn)
+            # Calculate the loss
+            loss = __compute_loss__(log_probs,minibatch,loss_fn)
 
-                # Backpropagation of the gradients
-                lossval = loss.clone()
-                loss.backward()
-                # Parameter update
-                optimizer.step()
+            # Backpropagation of the gradients
+            lossval = loss.clone()
+            loss.backward()
+            # Parameter update
+            optimizer.step()
 
             # Logging the current status
             data_count += len(minibatch)
