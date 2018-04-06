@@ -20,6 +20,5 @@ for afile in glob.glob('./*openface.csv'):
             print afile
             print 'Intensity:',sample_list
             print 'frame_number:',frame_number
-        else:
-            sample_list = {}
-            frame_number = {}
+    sample_list = {}
+    frame_number = {}
