@@ -39,6 +39,9 @@ def __def_tensor__(gpunum,listobj):
             return Variable(torch.cuda.FloatTensor([listobj]))        
 
 class LSTM_custom(nn.Module):
+    '''
+    A custom implementation of LSTM in pytorch. VERY slow
+    '''
     def __init__(self,input_dim,hidden_dim):
         super(LSTM_custom,self).__init__()
         self.W_xi = nn.Linear(input_dim,hidden_dim)
@@ -60,6 +63,10 @@ class LSTM_custom(nn.Module):
         return h_,c_
 
 class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
+    '''
+    An LSTM based rating predictor. It expects to intake
+    from ttdf.TED_Rating_Averaged_Dataset
+    '''
 
     def __init__(self, input_dim, hidden_dim, output_dim, gpuNum=-1):
         super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()

@@ -462,7 +462,13 @@ def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
 
 
 class TED_Rating_Averaged_Dataset(Dataset):
-    """TED rating dataset. The pose and face values are averaged."""
+    """
+    TED rating dataset. The pose and face values are averaged.
+    Note: Input Semantics for LSTM
+    The first axis is the sequence itself (T), the second indexes
+    instances in the mini-batch (B), and the third indexes elements
+    of the input (*).
+    """
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
             secondThresh=50.,scale_rating=True,posedim=36,prosodydim=49,\
@@ -476,6 +482,7 @@ class TED_Rating_Averaged_Dataset(Dataset):
 
         # Other important information for the dataset
         print 'reading word vectors'
+        # Reading the complete w2v dictionary
         self.wvec = read_crop_glove()
         print 'reading ratings'
         self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
@@ -615,17 +622,117 @@ def collate_for_averaged(datalist):
     Y = Variable(torch.from_numpy(Y_shaped))
     return {'X':datapack,'Y':Y}
 
-# def get_data_iter_averaged(set1,batch_size=4,shuffle=True,
-#         num_workers=4,collate_fn=collate_for_averaged,
-#         pin_memory=False):
-#     dataiter = DataLoader(set1,batch_size=batch_size,shuffle=shuffle,
-#         num_workers=num_workers,collate_fn=collate_fn)
-#     return dataiter
+class TED_Rating_wordonly_indices_Dataset(Dataset):
+    """TED rating dataset.
+    Only the word modality is used. It will pass the indices of the
+    word-vectors for each word in the transcript. For out of vocabulary
+    word, it will put -1 as the index. For compound words (e.g. modern-world),
+    it will juxtapose the indices of the constituent words.
+    
+    Note: Input Semantics for LSTM
+    The first axis is the sequence itself (T), the second indexes
+    instances in the mini-batch (B), and the third indexes elements
+    of the input (*).
+    """
+
+    def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
+            secondThresh=50.,scale_rating=True):
+
+        # get ratings
+        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
+            secondThresh,scale_rating)
+        # Indices of the data in the dataset
+        self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
+        print 'reading ratings'
+        self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
+
+        # Other important information for the dataset
+        print 'reading word vectors'
+        self.wvec_map = wvec_index_maker()
+        self.dims = self.wvec_map.dims
+        print 'Dataset Ready'
+
+        
+    def __len__(self):
+        return len(self.data_indices)
+
+    def __getitem__(self, idx):
+        '''
+        Given a data index (not videoid), get the corresponding data
+        '''
+        talkid = self.data_indices[idx]
+        outvec = self.wvec_map(talkid)
+            
+        # Note: This is T x * (not T x B (batch = 1) x *
+        # Because the collate function needs in this form for
+        # pad_sequence
+        # Note 2: The inputs have only one dimension (w2v index) in
+        # this case, i.e. length along * dimension is 1
+        xval = np.array(outvec).astype(np.float32).reshape(-1,1)
+
+        yval = np.reshape([1 if alab == 1 else 0 for alab in \
+            self.Y[talkid]],(1,-1)).astype(np.int64)
+        return {'X':xval,'Y':yval,'ylabel':self.ylabel}
+    
+class wvec_index_maker():
+    '''
+    A class to convert the transcript of any talk to a list of word-vector indices.
+    It takes care of the word pre-processing issues. For convenience, it also saves
+    the wordvector values (w2v_vals) as a matrix (easier gputization). The rows of
+    this matrix is consistent with the w2v_indices. Initialize it only once because
+    it loads the w2v dictionary while initializing.
+    '''
+    def __init__(self):
+        # Reading the complete w2v dictionary
+        wvec = read_crop_glove()
+        self.w2v_indices = {akey:i for i,akey in enumerate(wvec)}
+        self.w2v_vals = np.array(wvec.values()).astype(np.float32)
+        self.dims = len(wvec['the'])
+    
+    def __call__(self,talkid):
+        '''
+        Read all the sentences from the transcript
+        Convert all words to w2v indices using Word2idx function
+        '''
+        trscpt_loc = os.path.join(ted_data_path,'TED_meta/'+str(talkid)+'.pkl')
+        data = cp.load(open(trscpt_loc))
+        allidx=[]
+        for item in data['fave_style_transcript']:
+            for asent in item['sentences']:
+                # Filter tags
+                temp = asent.replace('{NS}','').replace('{LG}','').strip()
+                if temp:
+                    wordlist = word_tokenize(temp.lower())
+                    allidx.extend(self.word2idx(wordlist))
+        return allidx
+
+    def word2idx(self,wordlist):
+        # Convert a list of words to list of wordvector indices
+        # breaks compound words into constituents
+        # puts -1 for out of vocabulary words        
+        allidx=[]
+        for aword in wordlist:
+            if aword in self.w2v_indices:
+                allidx.append(self.w2v_indices[aword])
+            elif '-' in aword:
+                tempwords = aword.split('-')
+                allidx.extend(self.word2idx(tempwords))
+            elif '.' in aword:
+                tempwords = aword.split('.')
+                allidx.extend(self.word2idx(tempwords))
+            else:
+                allidx.append(-1)
+        return allidx
 
 class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
     """
     TED rating dataset. The word, pose and face values are
     sent as three different streams.
+    
+    Note: Input Semantics for LSTM
+    The first axis is the sequence itself (T), the second indexes
+    instances in the mini-batch (B), and the third indexes elements
+    of the input (*).
     """
     def __getitem__(self, idx):
         '''
