@@ -152,23 +152,23 @@ def train_model(model, feeder,
     torch.save(model.cpu(),open(model_filename,'wb'))
 
 def train_recurrent_models(
-    dataset_type = 'averaged',
+    dataset_type = 'word-only',
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
-    minibatch_size = 3,
+    minibatch_size = 5,
     hidden_dim = 128,
     modality=['word','audio','pose','face'],
     output_folder = 'TED_stats/',
     train_test_ratio = 0.85,
     learning_rate = 0.01,
     max_iter_over_dataset = 20,
-    GPUnum = 0):
+    GPUnum = -1):
     '''
     Trains a GRU or LSTM model using TED_Rating_Averaged_Dataset
     '''
     old_time = time.time()
-    # Prepare output folder
+    # Prepare the output folder and its contents
     outpath = os.path.join(ted_data_path,output_folder)
     if not os.path.exists(outpath):
         os.makedirs(outpath)
@@ -186,13 +186,36 @@ def train_recurrent_models(
             firstThresh = firstThresh, secondThresh = secondThresh,
             scale_rating = scale_rating,modality=modality)
     elif dataset_type == 'streamed':
-        train_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=train_id,
+        train_dataset = ttdf.TED_Rating_Streamed_Dataset(data_indices=train_id,
             firstThresh = firstThresh, secondThresh = secondThresh,
             scale_rating = scale_rating,modality=modality)
+    elif dataset_type == 'word-only':
+        train_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
+            data_indices=train_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating)
 
-    # Constructing minibaches
-    minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
-        minibatch_size,GPUnum)
+    # Constructing minibaches. With lots of experiment, finally using
+    # pytorch's dataloader approach as that appears to be the fastest
+    # way for iterating over the data
+    ##################### DEBUG 1 ###############
+    # oldtime = time.time()
+    #############################################
+    # Option 1
+    #minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
+    #    minibatch_size,GPUnum)
+    # Option 2
+    #minibatch_iter = ttdf.get_minibatch_iter_pooled(train_dataset,\
+    #    minibatch_size,GPUnum)
+    # Option 3:
+    minibatch_iter = ttdf.get_data_iter_simple(train_dataset,\
+        batch_size=minibatch_size,gpuNum=GPUnum)
+    ##################### DEBUG 2 ###############
+    # print 'Elapsed time:',time.time()-oldtime
+    #############################################
+    for x in minibatch_iter:
+        print type(x)
+    import pdb; pdb.set_trace()  # breakpoint 1ba0884e //
+
     train_datalen = len(train_dataset)
     print 'Dataset Length:',train_datalen
 

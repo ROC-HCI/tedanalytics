@@ -6,6 +6,8 @@ import threading
 import cPickle as cp
 import numpy as np
 import scipy as sp
+from functools import partial
+import multiprocessing as mp
 from itertools import izip_longest
 from nltk.tokenize import word_tokenize
 
@@ -18,7 +20,7 @@ from TED_data_location import ted_data_path, wordvec_path
 import torch
 from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader 
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_sequence
 
 def split_train_test(train_ratio=0.8,talklist=lst_talks.all_valid_talks):
     '''
@@ -402,28 +404,6 @@ def __tree_rating_feeder__(atalk,gpunum=-1):
             rating_t = Variable(torch.cuda.FloatTensor(y))
     return all_deptree,rating_t.view(1,-1)
 
-def __pad_sequence__(sequences, batch_first=False, padding_value=0):
-    max_size = sequences[0].size()
-    max_len, trailing_dims = max_size[0], max_size[1:]
-    prev_l = max_len
-    if batch_first:
-        out_dims = (len(sequences), max_len) + trailing_dims
-    else:
-        out_dims = (max_len, len(sequences)) + trailing_dims
-
-    out_variable = Variable(sequences[0].data.new(*out_dims).fill_(padding_value))
-    for i, variable in enumerate(sequences):
-        length = variable.size(0)
-        if prev_l < length:
-            raise ValueError("lengths array has to be sorted in decreasing order")
-        prev_l = length
-        if batch_first:
-            out_variable[i, :length, ...] = variable
-        else:
-            out_variable[:length, i, ...] = variable
-
-    return out_variable
-
 def gputize(input,gpuNum):
     '''
     Put torch elements to GPU if necessary
@@ -449,16 +429,68 @@ def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
     m = len(dataset)
     minibatch_size = min(minibatch_size,m)
     idx = np.arange(m)
-    while True:
-        np.random.shuffle(idx)
-        for i in range(0,len(idx),minibatch_size):
-            batch = []
-            # TODO: Ideal candidate for parallelization
-            for j in range(i,i+minibatch_size):
-                adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
-                    for akey in datakeys}
-                batch.append(adata)
-            yield batch
+    np.random.shuffle(idx)
+    for i in range(0,len(idx),minibatch_size):
+        batch = []
+        for j in range(i,min(len(idx),i+minibatch_size)):
+            adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
+                for akey in datakeys}
+            batch.append(adata)
+        yield batch
+
+def f_map(minb_idx,dataset,datakeys,gpuNum):
+    retlist=[]
+    for i in minb_idx:
+        retlist.append({akey:variablize(dataset[i][akey],gpuNum)\
+                for akey in datakeys})
+    return retlist
+
+def f_map_pooled(minb_idx,dataset,datakeys,gpuNum,q):
+    retlist=[]
+    for i in minb_idx:
+        retlist.append({akey:variablize(dataset[i][akey],gpuNum)\
+            for akey in datakeys})
+    q.put(retlist)
+
+def get_minibatch_iter_pooled(dataset,minibatch_size,gpuNum,
+    datakeys=['X','Y']):
+    '''
+    Iterator for a shuffled and variablized minibatch.
+    '''
+    m = len(dataset)
+    minibatch_size = min(minibatch_size,m)
+    idx = np.arange(m)
+    np.random.shuffle(idx)
+
+    # create a worker pool and the mapping function
+    q = mp.Queue()
+    processes = mp.cpu_count()-1
+
+    # Create minibatch indices and map using the workers
+    #minb_indices = [[j for j in range(i,min(len(idx),i+minibatch_size))] \
+    #    for i in range(0,len(idx),minibatch_size)]
+    minb_indices = [[j for j in range(i,min(len(idx),i+m/processes))] \
+        for i in range(0,len(idx),m/processes)]
+
+    # Run individual processes
+    proclist = []
+    for i in range(processes):
+        p = mp.Process(target=f_map_pooled,\
+            args=(minb_indices[i],dataset,datakeys,gpuNum,q,))
+        p.daemon = True
+        p.start()
+        proclist.append(p)
+
+    # Collect all results into a single result list.
+    datasetlist = []
+    for p in proclist:
+        datasetlist.extend(q.get())
+      
+    # Hold until all done
+    for p in proclist:
+        p.join()
+
+    return datasetlist
 
 
 class TED_Rating_Averaged_Dataset(Dataset):
@@ -599,9 +631,12 @@ class TED_Rating_Averaged_Dataset(Dataset):
             self.Y[talkid]],(1,-1)).astype(np.int64)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
 
-def collate_for_averaged(datalist):
+def collate_for_simple_datasets(datalist,gpuNum):
     '''
-    Pad and pack a list of datapoints obtained from TED_Rating_Averaged_Dataset
+    Pad and pack a list of datapoints obtained from 
+    TED_Rating_Averaged_Dataset
+    or
+    TED_Rating_wordonly_indices_Dataset
     '''
     # Packing X 
     sizelist = [np.size(item['X'],axis=0) for item in datalist]
@@ -611,15 +646,15 @@ def collate_for_averaged(datalist):
     Y_batch = []
     # Sorting based on size
     for i in idx:
-        X_batch.append(Variable(torch.from_numpy(datalist[i]['X'])))
+        X_batch.append(variablize(datalist[i]['X'],gpuNum))
         Y_batch.append(datalist[i]['Y'])
     # Padded the data dimension is T x B (batchsize) x *
-    padded = __pad_sequence__(X_batch)
+    padded = pad_sequence(X_batch)
     # Datapack might give a wrong impression of dimension but its ok
     datapack = pack_padded_sequence(padded,sizelist)
     # Arranging Y
     Y_shaped = np.concatenate(Y_batch,axis=0)
-    Y = Variable(torch.from_numpy(Y_shaped))
+    Y = variablize(Y_shaped,gpuNum)
     return {'X':datapack,'Y':Y}
 
 class TED_Rating_wordonly_indices_Dataset(Dataset):
@@ -676,7 +711,6 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         yval = np.reshape([1 if alab == 1 else 0 for alab in \
             self.Y[talkid]],(1,-1)).astype(np.int64)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
-
 
     
 class wvec_index_maker():
@@ -812,7 +846,7 @@ def collate_for_streamed(datalist):
                 dattemp = Variable(torch.from_numpy(datalist[i][akey]))
                 alldata[akey]+=[dattemp]
         if not akey=='Y':        
-            alldata[akey] = __pad_sequence__(alldata[akey])
+            alldata[akey] = pad_sequence(alldata[akey])
             alldata[akey] = pack_padded_sequence(alldata[akey],sizelist)
     # Packing Y
     Y_shaped = np.concatenate(Y_batch,axis=0)
@@ -820,10 +854,23 @@ def collate_for_streamed(datalist):
     return alldata
 
 def get_data_iter_streamed(set2,batch_size=4,shuffle=True,
-        num_workers=4,collate_fn=collate_for_streamed,
+        collate_fn=collate_for_streamed,
         pin_memory=False):
     dataiter = DataLoader(set2,batch_size=batch_size,shuffle=shuffle,
-        num_workers=num_workers,collate_fn=collate_fn)
+        num_workers=mp.cpu_count()-1,collate_fn=collate_fn,
+        pin_memory=pin_memory)
+    return dataiter
+
+def get_data_iter_simple(set2,batch_size=4,shuffle=True,
+        collate_fn=collate_for_simple_datasets,
+        pin_memory=False,gpuNum=-1):
+    '''
+    Uses pytorch's dataloader method to get an iterator over the dataset.
+    The comes in packed condition
+    '''
+    dataiter = DataLoader(set2,batch_size=batch_size,shuffle=shuffle,
+        num_workers=mp.cpu_count()-1,collate_fn=partial(collate_fn,
+        gpuNum=gpuNum),pin_memory=pin_memory)
     return dataiter
 
 def main():
