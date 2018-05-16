@@ -10,6 +10,59 @@ import time
 import numpy as np
 from TED_data_location import ted_data_path, wordvec_path
 import ted_talk_data_feeder as ttdf
+# from graphviz import Digraph
+
+
+
+# def make_dot(var, params):
+#     """ Produces Graphviz representation of PyTorch autograd graph
+    
+#     Blue nodes are the Variables that require grad, orange are Tensors
+#     saved for backward in torch.autograd.Function
+    
+#     Args:
+#         var: output Variable
+#         params: dict of (name, Variable) to add names to node that
+#             require grad (TODO: make optional)
+#     """
+#     param_map = {id(v): k for k, v in params.items()}
+#     print(param_map)
+    
+#     node_attr = dict(style='filled',
+#                      shape='box',
+#                      align='left',
+#                      fontsize='12',
+#                      ranksep='0.1',
+#                      height='0.2')
+#     dot = Digraph(node_attr=node_attr, graph_attr=dict(size="12,12"))
+#     seen = set()
+    
+#     def size_to_str(size):
+#         return '('+(', ').join(['%d'% v for v in size])+')'
+
+#     def add_nodes(var):
+#         if var not in seen:
+#             if torch.is_tensor(var):
+#                 dot.node(str(id(var)), size_to_str(var.size()), fillcolor='orange')
+#             elif hasattr(var, 'variable'):
+#                 u = var.variable
+#                 node_name = '%s\n %s' % (param_map.get(id(u)), size_to_str(u.size()))
+#                 dot.node(str(id(var)), node_name, fillcolor='lightblue')
+#             else:
+#                 dot.node(str(id(var)), str(type(var).__name__))
+#             seen.add(var)
+#             if hasattr(var, 'next_functions'):
+#                 for u in var.next_functions:
+#                     if u[0] is not None:
+#                         dot.edge(str(id(u[0])), str(id(var)))
+#                         add_nodes(u[0])
+#             if hasattr(var, 'saved_tensors'):
+#                 for t in var.saved_tensors:
+#                     dot.edge(str(id(t)), str(id(var)))
+#                     add_nodes(t)
+#     add_nodes(var.grad_fn)
+#     return dot
+
 
 class multiLinear(nn.Module):
     '''
@@ -37,30 +90,6 @@ def __def_tensor__(gpunum,listobj):
     else:
         with torch.cuda.device(gpunum):
             return Variable(torch.cuda.FloatTensor([listobj]))        
-
-class LSTM_custom(nn.Module):
-    '''
-    A custom implementation of LSTM in pytorch. VERY slow
-    '''
-    def __init__(self,input_dim,hidden_dim):
-        super(LSTM_custom,self).__init__()
-        self.W_xi = nn.Linear(input_dim,hidden_dim)
-        self.W_hi = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xf = nn.Linear(input_dim,hidden_dim)
-        self.W_hf = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xg = nn.Linear(input_dim,hidden_dim)
-        self.W_hg = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xo = nn.Linear(input_dim,hidden_dim)
-        self.W_ho = nn.Linear(hidden_dim,hidden_dim)
-
-    def forward(self,x,h,c):
-        i = F.sigmoid(self.W_xi(x) + self.W_hi(h))
-        f = F.sigmoid(self.W_xf(x) + self.W_hf(h))
-        g = F.tanh(self.W_xg(x) + self.W_hg(h))
-        o = F.sigmoid(self.W_xo(x)+self.W_ho(h))
-        c_ = f*c + i*g
-        h_ = o * F.tanh(c_)
-        return h_,c_
 
 class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
     '''
@@ -94,6 +123,73 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
                     hx, cx = self.lstm(an_input,*self.hidden_0)
                 else:
                     hx, cx = self.lstm(an_input, hx,cx)
+            # Feed through Linear
+            rat_layer1 = self.linear_rat1(hx).view(-1,1)
+            rat_layer2 = self.linear_rat2(hx).view(-1,1)
+            rat_layer = torch.cat((rat_layer1,rat_layer2),dim=1)            
+            rat_scores = F.log_softmax(rat_layer, dim=1)
+            outrating.append(rat_scores)
+        return outrating
+
+class LSTM_custom(nn.Module):
+    '''
+    A custom implementation of LSTM in pytorch. VERY slow
+    '''
+    def __init__(self,input_dim,hidden_dim):
+        super(LSTM_custom,self).__init__()
+        self.W_xi = nn.Linear(input_dim,hidden_dim)
+        self.W_hi = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xf = nn.Linear(input_dim,hidden_dim)
+        self.W_hf = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xg = nn.Linear(input_dim,hidden_dim)
+        self.W_hg = nn.Linear(hidden_dim,hidden_dim)
+        self.W_xo = nn.Linear(input_dim,hidden_dim)
+        self.W_ho = nn.Linear(hidden_dim,hidden_dim)
+
+    def forward(self,x,h,c):
+        i = F.sigmoid(self.W_xi(x) + self.W_hi(h))
+        f = F.sigmoid(self.W_xf(x) + self.W_hf(h))
+        g = F.tanh(self.W_xg(x) + self.W_hg(h))
+        o = F.sigmoid(self.W_xo(x)+self.W_ho(h))
+        c_ = f*c + i*g
+        h_ = o * F.tanh(c_)
+        return h_,c_
+
+class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
+    '''
+    An LSTM based rating predictor. It expects to intake
+    from ttdf.TED_Rating_Averaged_Dataset
+    '''
+
+    def __init__(self, input_dim, hidden_dim, output_dim, 
+        wvev_vals,gpuNum=-1):
+        super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.wvec=ttdf.variablize(wvev_vals,gpuNum)
+        self.lstm = nn.LSTMCell(input_dim, hidden_dim)
+        #self.lstm = LSTM_custom(input_dim, hidden_dim)
+        self.linear_rat1 = nn.Linear(hidden_dim, output_dim)
+        self.linear_rat2 = nn.Linear(hidden_dim, output_dim)
+        self.gpuNum = gpuNum
+        self.hidden_0 = self.init_hidden() 
+
+
+    def init_hidden(self):
+        nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
+        return (ttdf.variablize(nullvec.copy(),self.gpuNum),
+                ttdf.variablize(nullvec.copy(),self.gpuNum))
+
+    def forward(self, minibatch):
+        outrating = []
+        for an_item in minibatch:            
+            # Feed through LSTM
+            for i,an_input in enumerate(an_item['X']):
+                x = self.wvec[an_input,:]
+                if i==0:
+                    # set the first hidden
+                    hx, cx = self.lstm(x,self.hidden_0)
+                else:
+                    hx, cx = self.lstm(x, (hx,cx))
             # Feed through Linear
             rat_layer1 = self.linear_rat1(hx).view(-1,1)
             rat_layer2 = self.linear_rat2(hx).view(-1,1)

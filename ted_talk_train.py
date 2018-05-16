@@ -156,24 +156,23 @@ def train_recurrent_models(
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
-    minibatch_size = 5,
+    minibatch_size = 50,
     hidden_dim = 128,
     modality=['word','audio','pose','face'],
     output_folder = 'TED_stats/',
-    train_test_ratio = 0.85,
-    learning_rate = 0.01,
-    max_iter_over_dataset = 20,
-    GPUnum = -1):
+    train_test_ratio = 0.90,
+    learning_rate = 0.0001,
+    max_iter_over_dataset = 1,
+    GPUnum = 0):
     '''
     Trains a GRU or LSTM model using TED_Rating_Averaged_Dataset
     '''
-    old_time = time.time()
     # Prepare the output folder and its contents
     outpath = os.path.join(ted_data_path,output_folder)
     if not os.path.exists(outpath):
         os.makedirs(outpath)
-    output_log = 'LSTM_log_{0}_{1}_{2}_{3}_{4}_{5}_{6}.txt'.format(dataset_type,\
-        scale_rating,''.join([m[0] for m in modality]),\
+    output_log = 'LSTM_log_{0}_{1}_scale{2}_{3}_{4}_{5}_{6}.txt'.format(\
+        dataset_type,scale_rating,''.join([m[0] for m in modality]),\
         firstThresh,secondThresh,hidden_dim,max_iter_over_dataset)
     outlogfile = os.path.join(outpath,output_log)
     model_filename = os.path.join(outpath,output_log.replace('LSTM_log',
@@ -193,49 +192,13 @@ def train_recurrent_models(
         train_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=train_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating)
-
-    # Constructing minibaches. With lots of experiment, finally using
-    # pytorch's dataloader approach as that appears to be the fastest
-    # way for iterating over the data
-    ##################### DEBUG 1 ###############
-    # oldtime = time.time()
-    #############################################
-    # Option 1
-    #minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
-    #    minibatch_size,GPUnum)
-    # Option 2
-    #minibatch_iter = ttdf.get_minibatch_iter_pooled(train_dataset,\
-    #    minibatch_size,GPUnum)
-    # Option 3:
-    minibatch_iter = ttdf.get_data_iter_simple(train_dataset,\
-        batch_size=minibatch_size,gpuNum=GPUnum)
-    ##################### DEBUG 2 ###############
-    # print 'Elapsed time:',time.time()-oldtime
-    #############################################
-    for x in minibatch_iter:
-        print type(x)
-    import pdb; pdb.set_trace()  # breakpoint 1ba0884e //
-
     train_datalen = len(train_dataset)
     print 'Dataset Length:',train_datalen
-
-    # Build the model
-    model = ttm.LSTM_TED_Rating_Predictor_Averaged(
-        train_dataset.dims,hidden_dim,len(train_dataset.ylabel),GPUnum)
-    ttdf.gputize(model,GPUnum)
-
-    # lossfunction
-    loss_fn = nn.NLLLoss()
-    # Initialize the optimizer
-    optimizer = optim.Adam(model.parameters(),lr = learning_rate)
-    # Training time
-    model.train()
-
     # Training loop
     data_count = 0
     losslist=[]
-    # Save the parameters of the function call. It allows me to audit the models
-    with open(outlogfile,'wb') as fparam:
+    # Preparing file to save the parameters and status
+    with open(outlogfile,'wb') as fparam:    
         fparam.write('dataset_type={}'.format(dataset_type)+'\n')
         fparam.write('scale_rating={}'.format(scale_rating)+'\n')
         fparam.write('firstThresh={}'.format(firstThresh)+'\n')
@@ -248,62 +211,85 @@ def train_recurrent_models(
         fparam.write('modality={}'.format(json.dumps(modality))+'\n')
         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
-        while True:
-            # form minibatch
-            minibatch = minibatch_iter.next()
 
-            # Multiple run on a minibatch
-            # for i_ in range(5):
-            # Clear gradients from previous iterations
-            model.zero_grad()
+        # Build the model
+        print 'Loading Model (gputizing wvec) ...'
+        model = ttm.LSTM_TED_Rating_Predictor_wordonly(
+            train_dataset.dims,hidden_dim,len(train_dataset.ylabel),
+            train_dataset.wvec_map.w2v_vals,GPUnum)
+        ttdf.gputize(model,GPUnum)
+        # Training time
+        model.train()        
+        print 'done'
+        # lossfunction
+        loss_fn = nn.NLLLoss()
+        # Initialize the optimizer
+        optimizer = optim.Adam(model.parameters(),lr = learning_rate)        
+ 
+        # Iterate over the dataset for several times
+        old_time = time.time()
+        for an_iter in range(max_iter_over_dataset):
+            # Constructing minibaches. With lots of experiment, finally using
+            # the first option as it is fast and convenient
+            ##################### DEBUG 1 ###############
+            # oldtime = time.time()
+            #############################################
+            # Option 1
+            minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
+                minibatch_size,GPUnum)
+            # Option 2
+            #minibatch_iter = ttdf.get_minibatch_iter_pooled(train_dataset,\
+            #    minibatch_size,GPUnum)
+            # Option 3: Note: The data is packed
+            # minibatch_iter = ttdf.get_data_iter_simple(train_dataset,\
+            #    batch_size=minibatch_size,gpuNum=GPUnum)
+            ##################### DEBUG 2 ###############
+            # print 'Elapsed time:',time.time()-oldtime
+            #############################################
 
-            # Forward pass through the model
-            log_probs = model(minibatch)
+            # Iterate over a minibatch
+            for i,minibatch in enumerate(minibatch_iter):
+                model.zero_grad()
+                # Forward pass through the model
+                log_probs = model(minibatch)
+                # Calculate the loss
+                loss = __compute_loss__(log_probs,minibatch,loss_fn)
+                # Backpropagation of the gradients
+                lossval = loss.cpu().data.numpy()
+                loss.backward()
+                # Parameter update
+                optimizer.step()
 
-            # Calculate the loss
-            loss = __compute_loss__(log_probs,minibatch,loss_fn)
-
-            # Backpropagation of the gradients
-            lossval = loss.clone()
-            loss.backward()
-            # Parameter update
-            optimizer.step()
-
-            # Logging the current status
-            data_count += len(minibatch)
-            ratio_trained = float(data_count)/float(train_datalen)
-            if ratio_trained > max_iter_over_dataset:
-                break
-            lossval=lossval.cpu()
-            lossval = lossval.data[0]
-            if ratio_trained > 1:
+                # Logging the current status
+                data_count += len(minibatch)
+                ratio_trained = float(data_count)/float(train_datalen)
                 losslist.append(lossval)
-            status_msg =  'training: ,'+' Loss:'+\
-                str(lossval)+', iteration percent:'+str(ratio_trained*100)
+                status_msg='train:{0},Loss:{1:0.6},iter:{2:0.2}%(count={3})'
+                status_msg+=',iter_time:{4:0.4}'
+                status_msg=status_msg.format(i,lossval,ratio_trained*100,\
+                    data_count,time.time()-old_time)
+
+                print status_msg
+                fparam.write(status_msg + '\n')
+            
+            # Write the average loss of last iteration
+            status_msg = 'Average loss:{0}\n'.format(np.nanmean(losslist))
             print status_msg
-            fparam.write(status_msg + '\n')
-        
-        # Write the average loss of last iteration
-        status_msg = 'Average Loss after first iteration through dataset:{}\n'\
-            .format(np.nanmean(losslist))
-        print status_msg
-        fparam.write(status_msg)
-        fparam.write('Time:'+str(time.time() - old_time)+'\n')
-    print 'Total time:',time.time() - old_time
+            fparam.write(status_msg)
+            fparam.flush()
 
-    # Save the model
-    torch.save(model.cpu(),open(model_filename,'wb'))
-
+            # Save the model after an iteration over the dataset for safety
+            torch.save(model.cpu(),open(model_filename,'wb'))
 
 def __compute_loss__(log_probs,minibatch,loss_fn):
-    loss = None
+    losslist = []
+    count=0.
     for i,an_item in enumerate(minibatch):
         label = an_item['Y'].view(-1)
-        if i==0:
-            loss = loss_fn(log_probs[i],label)
-        else:
-            loss = torch.cat((loss,loss_fn(log_probs[i],label)),dim=0)    
-    loss = torch.mean(loss)
+        losslist.append(loss_fn(log_probs[i],label))
+        count+=1.
+    loss = reduce(torch.add,losslist)/count
+
     return loss
 
 
