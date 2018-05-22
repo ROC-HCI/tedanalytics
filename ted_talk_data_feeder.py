@@ -424,19 +424,33 @@ def variablize(input,gpuNum):
 
 def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
     '''
-    Iterator for a shuffled and variablized minibatch.
+    Iterator for a shuffled and variablized minibatch. This method correctly
+    handles the dataset.flatten_sentence flag.
     '''
     m = len(dataset)
     minibatch_size = min(minibatch_size,m)
     idx = np.arange(m)
     np.random.shuffle(idx)
-    for i in range(0,len(idx),minibatch_size):
-        batch = []
-        for j in range(i,min(len(idx),i+minibatch_size)):
-            adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
-                for akey in datakeys}
-            batch.append(adata)
-        yield batch
+    if dataset.flatten_sentence:
+        for i in range(0,len(idx),minibatch_size):
+            batch = []
+            for j in range(i,min(len(idx),i+minibatch_size)):
+                adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
+                    for akey in datakeys}
+                batch.append(adata)
+            yield batch
+    else:
+        for i in range(0,len(idx),minibatch_size):
+            batch = []
+            for j in range(i,min(len(idx),i+minibatch_size)):
+                adata={}
+                for akey in datakeys:
+                    if akey=='X':
+                        adata[akey]=[variablize(asent,gpuNum) for asent in dataset[idx[j]][akey]]
+                    else:
+                        adata[akey]=variablize(dataset[idx[j]][akey],gpuNum)
+                batch.append(adata)
+            yield batch
 
 def f_map(minb_idx,dataset,datakeys,gpuNum):
     retlist=[]
@@ -631,7 +645,7 @@ class TED_Rating_Averaged_Dataset(Dataset):
             self.Y[talkid]],(1,-1)).astype(np.int64)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
 
-def collate_for_simple_datasets(datalist,gpuNum):
+def collate_and_pack_simple(datalist,gpuNum):
     '''
     Pad and pack a list of datapoints obtained from 
     TED_Rating_Averaged_Dataset
@@ -671,18 +685,26 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
     """
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
-            secondThresh=50.,scale_rating=True):
+            secondThresh=50.,scale_rating=True,flatten_sentence=False):
 
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
+        ################ DEBUG * REMOVE ###############
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        #self.data_indices = self.data_indices[:100]
+        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+        ###############################################
         print 'reading ratings'
         self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
 
         # Other important information for the dataset
         print 'reading word vectors'
+        self.flatten_sentence=flatten_sentence
         self.wvec_map = wvec_index_maker()
         self.dims = self.wvec_map.dims
         print 'Dataset Ready'
@@ -696,8 +718,7 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         Given a data index (not videoid), get the corresponding data
         '''
         talkid = self.data_indices[idx]
-        outvec = self.wvec_map(talkid)
-            
+        outvec = self.wvec_map(talkid,self.flatten_sentence)        
         # Note: This is T x * (not T x B (batch = 1) x *
         # Because the collate function needs in this form for
         # pad_sequence
@@ -706,10 +727,14 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         # Note 3: the x values are converted to numpy equivalent of
         # tensor.Longtensor because these are indices and will be supplied
         # as index intigers in pytorch later on.
-        xval = np.array(outvec).astype(np.int64).reshape(-1,1)
-
+        if self.flatten_sentence:
+            xval = np.array(outvec).astype(np.int64).reshape(-1,1)
+        else:
+            xval=[np.array(asent).astype(np.int64).reshape(-1,1) \
+                for asent in outvec]
+        # Process the labels
         yval = np.reshape([1 if alab == 1 else 0 for alab in \
-            self.Y[talkid]],(1,-1)).astype(np.int64)
+            self.Y[talkid]],(-1,1)).astype(np.float32)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
 
     
@@ -728,7 +753,7 @@ class wvec_index_maker():
         self.w2v_vals = np.array(wvec.values()).astype(np.float32)
         self.dims = len(wvec['the'])
     
-    def __call__(self,talkid):
+    def __call__(self,talkid,flatten_sentence=True):
         '''
         Read all the sentences from the transcript
         Convert all words to w2v indices using Word2idx function
@@ -742,7 +767,10 @@ class wvec_index_maker():
                 temp = asent.replace('{NS}','').replace('{LG}','').strip()
                 if temp:
                     wordlist = word_tokenize(temp.lower())
-                    allidx.extend(self.word2idx(wordlist))
+                    if flatten_sentence:
+                        allidx.extend(self.word2idx(wordlist))
+                    else:
+                        allidx.append(self.word2idx(wordlist))
         return allidx
 
     def word2idx(self,wordlist):
@@ -853,22 +881,22 @@ def collate_for_streamed(datalist):
     alldata['Y'] = Variable(torch.from_numpy(Y_shaped))
     return alldata
 
-def get_data_iter_streamed(set2,batch_size=4,shuffle=True,
+def get_data_iter_streamed(dataset,batch_size=4,shuffle=True,
         collate_fn=collate_for_streamed,
         pin_memory=False):
-    dataiter = DataLoader(set2,batch_size=batch_size,shuffle=shuffle,
+    dataiter = DataLoader(dataset,batch_size=batch_size,shuffle=shuffle,
         num_workers=mp.cpu_count()-1,collate_fn=collate_fn,
         pin_memory=pin_memory)
     return dataiter
 
-def get_data_iter_simple(set2,batch_size=4,shuffle=True,
-        collate_fn=collate_for_simple_datasets,
+def get_data_iter_simple(dataset,batch_size=4,shuffle=True,
+        collate_fn=collate_and_pack_simple,
         pin_memory=False,gpuNum=-1):
     '''
     Uses pytorch's dataloader method to get an iterator over the dataset.
     The comes in packed condition
     '''
-    dataiter = DataLoader(set2,batch_size=batch_size,shuffle=shuffle,
+    dataiter = DataLoader(dataset,batch_size=batch_size,shuffle=shuffle,
         num_workers=mp.cpu_count()-1,collate_fn=partial(collate_fn,
         gpuNum=gpuNum),pin_memory=pin_memory)
     return dataiter

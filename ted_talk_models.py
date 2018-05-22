@@ -146,7 +146,8 @@ class LSTM_custom(nn.Module):
         self.W_xo = nn.Linear(input_dim,hidden_dim)
         self.W_ho = nn.Linear(hidden_dim,hidden_dim)
 
-    def forward(self,x,h,c):
+    def forward(self,x,hidden):
+        h,c = hidden[0],hidden[1]
         i = F.sigmoid(self.W_xi(x) + self.W_hi(h))
         f = F.sigmoid(self.W_xf(x) + self.W_hf(h))
         g = F.tanh(self.W_xg(x) + self.W_hg(h))
@@ -161,42 +162,72 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
     from ttdf.TED_Rating_Averaged_Dataset
     '''
 
-    def __init__(self, input_dim, hidden_dim, output_dim, 
-        wvev_vals,gpuNum=-1):
+    def __init__(self, hidden_dim, output_dim, 
+        wvec_vals,gpuNum=-1):
         super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
         self.hidden_dim = hidden_dim
-        self.wvec=ttdf.variablize(wvev_vals,gpuNum)
-        self.lstm = nn.LSTMCell(input_dim, hidden_dim)
+        self.wvec=ttdf.variablize(wvec_vals,gpuNum)
+        self.input_dim = np.size(wvec_vals,axis=1)
+        self.lstm = nn.LSTMCell(self.input_dim, hidden_dim)
         #self.lstm = LSTM_custom(input_dim, hidden_dim)
-        self.linear_rat1 = nn.Linear(hidden_dim, output_dim)
-        self.linear_rat2 = nn.Linear(hidden_dim, output_dim)
+        self.linear_rat = nn.Linear(hidden_dim, output_dim)
         self.gpuNum = gpuNum
-        self.hidden_0 = self.init_hidden() 
-
+        self.hidden_0 = self.init_hidden()
+        # Out of vocabulary vector
+        self.oov = ttdf.variablize(np.zeros((1,self.input_dim)\
+            ).astype(np.float32),self.gpuNum)
 
     def init_hidden(self):
         nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
         return (ttdf.variablize(nullvec.copy(),self.gpuNum),
                 ttdf.variablize(nullvec.copy(),self.gpuNum))
 
-    def forward(self, minibatch):
+    def forward(self, minibatch):        
         outrating = []
         for an_item in minibatch:            
-            # Feed through LSTM
-            for i,an_input in enumerate(an_item['X']):
-                x = self.wvec[an_input,:]
-                if i==0:
-                    # set the first hidden
-                    hx, cx = self.lstm(x,self.hidden_0)
-                else:
-                    hx, cx = self.lstm(x, (hx,cx))
-            # Feed through Linear
-            rat_layer1 = self.linear_rat1(hx).view(-1,1)
-            rat_layer2 = self.linear_rat2(hx).view(-1,1)
-            rat_layer = torch.cat((rat_layer1,rat_layer2),dim=1)            
-            rat_scores = F.log_softmax(rat_layer, dim=1)
+            if type(an_item['X'])==list:
+                # Sentence is not flattened. We want average of outputs
+                # for each sentence.
+                outsum = self.hidden_0[0]
+                count = 0.
+                for j,asent in enumerate(an_item['X']):
+                    for i,an_input in enumerate(asent):
+                        if an_input<0:
+                            x = self.oov
+                        else:
+                            x = self.wvec[an_input,:]                        
+                        if i==0:
+                            # set the first hidden
+                            hx, cx = self.lstm(x,self.hidden_0)
+                        else:
+                            hx, cx = self.lstm(x, (hx,cx))
+                        # Clip the gradients for numeric stability
+                        # for p in self.lstm.parameters():
+
+                    # Accumulate vectors per sentence
+                    outsum = outsum + hx
+                    count = count + 1.
+                # Bag-of-Sentences Model
+                hx = outsum/count                    
+            else:
+                # Feed through LSTM
+                for i,an_input in enumerate(an_item['X']):
+                    if an_input<0:
+                        x = self.oov
+                    else:
+                        x = self.wvec[an_input,:]
+                    if i==0:
+                        # set the first hidden
+                        hx, cx = self.lstm(x,self.hidden_0)
+                    else:
+                        hx, cx = self.lstm(x, (hx,cx))
+            # Test if the output exploded or not
+            # if torch.sum(hx!=hx):
+            # Feed through the Linear            
+            rat_scores = self.linear_rat(hx).view(-1,1)
             outrating.append(rat_scores)
         return outrating
+
 
 class SyntacticSemanticEngine(nn.Module):
     '''

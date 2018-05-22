@@ -58,6 +58,101 @@ def read_output_log(result_dir = 'SSE_result/',logfile = 'train_logfile.txt'):
         model = torch.load(os.path.join(inpath,modelfile))
         return test_idx,train_idx,model
 
+def __tonum__(astr):
+    try:
+        return float(astr)
+    except ValueError:
+        return astr
+
+def read_lstm_log(afile,averageonly=True):
+    '''
+    Reads the contents of LSTM_log files.
+    '''
+    logdata={}
+    with open(afile) as fin:
+        for aline in fin:
+            aline = aline.strip()
+            if '=' in aline and not 'count' in aline:
+                k,v = aline.split('=')
+                logdata[k]=__tonum__(v)
+            elif averageonly and aline.startswith('train'):
+                traintest = 'train'
+                time = float(aline.split(',')[-1].split(':')[-1])
+            elif averageonly and aline.startswith('test'):
+                traintest = 'test'
+                time = float(aline.split(',')[-1].split(':')[-1])
+            elif averageonly and aline.startswith('Average loss'):
+                avgloss = float(aline.split(':')[-1])
+                logdata.setdefault(traintest,[]).append([time,avgloss])
+            elif not averageonly and aline.startswith('train'):
+                linedat = {afield.split(':')[0]:float(afield.split(':')[-1])\
+                    for afield in aline.split(',') \
+                        if type(__tonum__(afield.split(':')[-1]))==float}
+                logdata.setdefault('train',[]).append([linedat['iter_time'],\
+                    linedat['Loss']])
+            elif not averageonly and aline.startswith('test'):
+                linedat = {afield.split(':')[0]:float(afield.split(':')[-1])\
+                    for afield in aline.split(',') \
+                        if type(__tonum__(afield.split(':')[-1]))==float}
+                logdata.setdefault('test',[]).append([linedat['iter_time'],\
+                    linedat['Loss']])
+    return logdata
+
+def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
+    outfile='summary_plot_LSTM_log.pdf',ignoredfields = \
+    ['train','test','train_indices','test_indices','model_outfile','gpunum'],\
+    markers = ['','.','o','^','+','v','_',',','*','<','s','>','|','x']):
+    '''
+    Summarize all the LSTM training logs with a single figure
+    '''
+    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',prefix+'*'))
+    outfilename = os.path.join(ted_data_path,'TED_stats/',outfile)
+    alldata={}
+    for afile in filenames:
+        filedata = read_lstm_log(afile,averageonly)
+        for akey in filedata:
+            alldata.setdefault(akey,[]).append(filedata[akey])
+    # Isolate the parameters with unique and non-unique values
+    unique=[]
+    nonunique=[]
+    for akey in alldata:
+        if not akey in ignoredfields and len(set(alldata[akey]))==1:
+            unique.append(akey)
+        elif not akey in ignoredfields and len(set(alldata[akey]))>1:
+            nonunique.append(akey)
+    # Make legends for the nonunique parameters and draw iter vs loss plot
+    fig=plt.figure(0,figsize=(8.8, 4.8))
+    plt.clf()
+    for i in range(len(filenames)):
+        print filenames[i]
+        alegend=''
+        # make legends
+        for j,akey in enumerate(nonunique):
+            alegend+='{}={}'.format(akey,alldata[akey][i])
+            if j<len(nonunique)-1:
+                alegend+=','
+        # draw plots
+        trainloss = np.array(alldata['train'][i])
+        plt.plot(trainloss[:,0]/3600.,trainloss[:,1],color='blue',\
+            marker=markers[i],label='Train,'+alegend)
+        if 'test' in alldata:
+            testloss = np.array(alldata['test'][i])
+            plt.plot(testloss[:,0]/3600.,testloss[:,1],\
+                color='red',marker=markers[i],label='Test,'+alegend)
+    plt.grid('on',which='both')
+    plt.xlabel('Iteration time (hour)')
+    plt.ylabel('Loss Value')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(outfilename)
+    plt.close()
+    print 'Loss figure saved in:',outfilename
+    # Print the unique parameters
+    print 'Other Common parameters:'
+    for akey in unique:
+        print akey,'=',set(alldata[akey]).pop()
+    print 'Blue is Train'
+    print 'Red is Test'
 
 def loss_vs_sense(resultfile='dev_result.pkl',\
     train_log='train_logfile.txt',folder_prefix='run_',outfile='error_analysis.png'):
