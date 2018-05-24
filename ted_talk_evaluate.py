@@ -10,10 +10,15 @@ import matplotlib.pyplot as plt
 def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     y_gt_dict, threshold, y_labels, outfilename, max_data = np.inf):
     '''
-    Evaluate a trained model with the held out dataset.
+    This function evaluates only trained SyntacticSemanticEngine and
+    RevisedTreeEncoder models with held out dataset.
+    Please note that the FINAL test should run on a hidden test set indices.
+    In that case, the test_idx should equal list_of_talks.test_set.
+
     Most of the inputs to this function can be obtained from the
     ted_talk_data_feeder.binarized_ratings function. The model argument takes
     the pretrained model that is under evaluation.
+    
     This function returns the results of evaluation (e.g. precision, recall,
     accuracy, f1 score etc.) as well as the average loss over the held out data.
     The results are returned as a dictionary. This dictionary is also saved
@@ -57,6 +62,12 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     # Save results in pkl file
     cp.dump(results,open(outfilename+'.pkl','wb'))
     return results
+
+def evaluate_recurrent_model():
+    '''
+    TODO: Implement evaluation code for LSTM models that take sequential datasets.
+    '''
+    raise NotImplementedError
 
 def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
     outfilename='',bypass_ROC=True):

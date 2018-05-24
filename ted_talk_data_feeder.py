@@ -695,7 +695,7 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         ################ DEBUG * REMOVE ###############
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        #self.data_indices = self.data_indices[:100]
+        # self.data_indices = self.data_indices[:10]
         #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
         ###############################################

@@ -120,6 +120,8 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
             unique.append(akey)
         elif not akey in ignoredfields and len(set(alldata[akey]))>1:
             nonunique.append(akey)
+    import pdb; pdb.set_trace()  # breakpoint b0e649d8 //
+    
     # Make legends for the nonunique parameters and draw iter vs loss plot
     fig=plt.figure(0,figsize=(8.8, 4.8))
     plt.clf()
@@ -141,7 +143,10 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
                 color='red',marker=markers[i],label='Test,'+alegend)
     plt.grid('on',which='both')
     plt.xlabel('Iteration time (hour)')
-    plt.ylabel('Loss Value')
+    if averageonly:
+        plt.ylabel('Average loss (in an iteration over dataset)')
+    else:
+        plt.ylabel('Loss per minibatch')
     plt.legend()
     plt.tight_layout()
     plt.savefig(outfilename)

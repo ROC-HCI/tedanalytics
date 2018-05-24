@@ -10,58 +10,6 @@ import time
 import numpy as np
 from TED_data_location import ted_data_path, wordvec_path
 import ted_talk_data_feeder as ttdf
-# from graphviz import Digraph
-
-
-
-# def make_dot(var, params):
-#     """ Produces Graphviz representation of PyTorch autograd graph
-    
-#     Blue nodes are the Variables that require grad, orange are Tensors
-#     saved for backward in torch.autograd.Function
-    
-#     Args:
-#         var: output Variable
-#         params: dict of (name, Variable) to add names to node that
-#             require grad (TODO: make optional)
-#     """
-#     param_map = {id(v): k for k, v in params.items()}
-#     print(param_map)
-    
-#     node_attr = dict(style='filled',
-#                      shape='box',
-#                      align='left',
-#                      fontsize='12',
-#                      ranksep='0.1',
-#                      height='0.2')
-#     dot = Digraph(node_attr=node_attr, graph_attr=dict(size="12,12"))
-#     seen = set()
-    
-#     def size_to_str(size):
-#         return '('+(', ').join(['%d'% v for v in size])+')'
-
-#     def add_nodes(var):
-#         if var not in seen:
-#             if torch.is_tensor(var):
-#                 dot.node(str(id(var)), size_to_str(var.size()), fillcolor='orange')
-#             elif hasattr(var, 'variable'):
-#                 u = var.variable
-#                 node_name = '%s\n %s' % (param_map.get(id(u)), size_to_str(u.size()))
-#                 dot.node(str(id(var)), node_name, fillcolor='lightblue')
-#             else:
-#                 dot.node(str(id(var)), str(type(var).__name__))
-#             seen.add(var)
-#             if hasattr(var, 'next_functions'):
-#                 for u in var.next_functions:
-#                     if u[0] is not None:
-#                         dot.edge(str(id(u[0])), str(id(var)))
-#                         add_nodes(u[0])
-#             if hasattr(var, 'saved_tensors'):
-#                 for t in var.saved_tensors:
-#                     dot.edge(str(id(t)), str(id(var)))
-#                     add_nodes(t)
-#     add_nodes(var.grad_fn)
-#     return dot
 
 
 class multiLinear(nn.Module):
@@ -79,11 +27,9 @@ class multiLinear(nn.Module):
 
 def __def_tensor__(gpunum,listobj):
     '''
-    Helper Function.
-    This function defines a tensor considering whether or not to use the GPU.
-    TODO: Set for deprecation. Utilize proper GPU handling technique mentioned
-    in pytorch tutorial:
-    http://pytorch.org/docs/0.3.1/notes/cuda.html#memory-management
+    Helper Function. Donot Use. Better option is to use gputize and variablize
+    methods defined in ted_talk_data_feeded
+    TODO: Set for deprecation.
     '''
     if gpunum < 0:
         return Variable(torch.Tensor([listobj]))
@@ -95,15 +41,15 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
     '''
     An LSTM based rating predictor. It expects to intake
     from ttdf.TED_Rating_Averaged_Dataset
+    It is for use of multiple modalities.
     '''
 
     def __init__(self, input_dim, hidden_dim, output_dim, gpuNum=-1):
         super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()
         self.hidden_dim = hidden_dim
-        #self.lstm = nn.LSTMCell(input_dim, hidden_dim)
-        self.lstm = LSTM_custom(input_dim, hidden_dim)
-        self.linear_rat1 = nn.Linear(hidden_dim, output_dim)
-        self.linear_rat2 = nn.Linear(hidden_dim, output_dim)
+        self.lstm = nn.LSTMCell(input_dim, hidden_dim)
+        #self.lstm = LSTM_custom(input_dim, hidden_dim)
+        self.linear_rat = nn.Linear(hidden_dim, output_dim)
         self.gpuNum = gpuNum
         self.hidden_0 = self.init_hidden() 
 
@@ -124,16 +70,14 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
                 else:
                     hx, cx = self.lstm(an_input, hx,cx)
             # Feed through Linear
-            rat_layer1 = self.linear_rat1(hx).view(-1,1)
-            rat_layer2 = self.linear_rat2(hx).view(-1,1)
-            rat_layer = torch.cat((rat_layer1,rat_layer2),dim=1)            
+            rat_layer = self.linear_rat(hx).view(-1,1)
             rat_scores = F.log_softmax(rat_layer, dim=1)
             outrating.append(rat_scores)
         return outrating
 
 class LSTM_custom(nn.Module):
     '''
-    A custom implementation of LSTM in pytorch. VERY slow
+    A custom implementation of LSTM in pytorch. Donot use. VERY slow
     '''
     def __init__(self,input_dim,hidden_dim):
         super(LSTM_custom,self).__init__()
@@ -159,7 +103,7 @@ class LSTM_custom(nn.Module):
 class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
     '''
     An LSTM based rating predictor. It expects to intake
-    from ttdf.TED_Rating_Averaged_Dataset
+    from ttdf.TED_Rating_Averaged_Dataset 
     '''
 
     def __init__(self, hidden_dim, output_dim, 
@@ -201,9 +145,6 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
                             hx, cx = self.lstm(x,self.hidden_0)
                         else:
                             hx, cx = self.lstm(x, (hx,cx))
-                        # Clip the gradients for numeric stability
-                        # for p in self.lstm.parameters():
-
                     # Accumulate vectors per sentence
                     outsum = outsum + hx
                     count = count + 1.
@@ -221,8 +162,6 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
                         hx, cx = self.lstm(x,self.hidden_0)
                     else:
                         hx, cx = self.lstm(x, (hx,cx))
-            # Test if the output exploded or not
-            # if torch.sum(hx!=hx):
             # Feed through the Linear            
             rat_scores = self.linear_rat(hx).view(-1,1)
             outrating.append(rat_scores)
@@ -233,6 +172,7 @@ class SyntacticSemanticEngine(nn.Module):
     '''
     Syntactic Semantic Engine is a new model for representing a dependency
     tree along with the distributed representations of the corresponding words.
+    TODO: gputize the wordvectors early
     '''
     def __init__(self,dep_dict,pos_dict,glove_voc,reduced=True,GPUnum=-1,
         sensedim=8,output_dim=14,activation=F.relu,final_activation=F.log_softmax):
@@ -393,6 +333,7 @@ class RevisedTreeEncoder(nn.Module):
     '''
     A revised (as of Feb 26th, 2018) version of the Syntactic Semantic Engine.
     TODO: Test Thoroughly
+    TODO: gputize the wordvectors early
     '''
     def __init__(self,dep_dict,pos_dict,glove_voc,reduced=True,GPUnum=-1,
         sensedim=8,output_dim=14,activation=F.relu,final_activation=F.log_softmax):

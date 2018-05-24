@@ -157,52 +157,89 @@ def train_recurrent_models(
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
-    minibatch_size = 100,
-    hidden_dim = 256,
+    minibatch_size = 50,
+    hidden_dim = 128,
     modality=['word','audio','pose','face'],
-    output_folder = 'TED_stats/',
+    output_folder = 'TED_models/',
     train_test_ratio = 0.90,
+    optimizer_fn = optim.Adagrad,
     learning_rate = 0.01,
     max_iter_over_dataset = 1000,
     GPUnum = 0):
     '''
-    Trains a GRU or LSTM model using TED_Rating_Averaged_Dataset
-    Name of all modalities: modality=['word','audio','pose','face'],
+    Trains the LSTM models using sequential datasets.
+    For word-only dataset type, modality is irrelevant.
+    For other dataset types, ('averaged','streamed') modality can
+    take any or all of 'word','audio','pose','face'. 
+    Note: averaged and streamed pipeline is not completely implemented yet.
+    Output:
+    1) A log file LSTM_log_ ... <random_number>.txt
+    2) A model weight file LSTM_model_ ... <random_number>.model
+    The random_number part for these two corresponding files will be same
+    but they will be different in different run. The first file contains
+    the training/testing status. The second file contains the neural weights
+    of the LSTM network.
     '''
     # Prepare trining and test split
     train_id,test_id = ttdf.split_train_test(train_test_ratio)
+    # Select correct dataset
     if dataset_type == 'averaged':
         train_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=train_id,
+            firstThresh = firstThresh, secondThresh = secondThresh,
+            scale_rating = scale_rating,modality=modality)
+        test_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=test_id,
             firstThresh = firstThresh, secondThresh = secondThresh,
             scale_rating = scale_rating,modality=modality)
     elif dataset_type == 'streamed':
         train_dataset = ttdf.TED_Rating_Streamed_Dataset(data_indices=train_id,
             firstThresh = firstThresh, secondThresh = secondThresh,
             scale_rating = scale_rating,modality=modality)
+        test_dataset = ttdf.TED_Rating_Streamed_Dataset(data_indices=test_id,
+            firstThresh = firstThresh, secondThresh = secondThresh,
+            scale_rating = scale_rating,modality=modality)
     elif dataset_type == 'word-only':
+        ################ DEBUG * REMOVE ###############
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        # test_id = test_id[:5]
+        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+        ###############################################
         train_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=train_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
             flatten_sentence=False)
+        test_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
+            data_indices=test_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            flatten_sentence=False)
     train_datalen = len(train_dataset)
-    print 'Dataset Length:',train_datalen
+    test_datalen = len(test_dataset)
+
+    print 'Training Dataset Length:',train_datalen
+    print 'Test Dataset Length:',test_datalen
 
     # Prepare the output folder and its contents
     outpath = os.path.join(ted_data_path,output_folder)
     if not os.path.exists(outpath):
         os.makedirs(outpath)
-    output_log = 'LSTM_log_ty{0}_s{1}_{2}_{3}_{4}_hid{5}_it{6}_tr{7}_bat{8}.txt'.format(\
+    # rand_filenum is a randomized element to make the filename of
+    # different runs different. Note that the log file and the 
+    rand_filenum = np.random.rand()
+    output_log = \
+    'LSTM_log_ty{0}_s{1}_{2}_{3}_{4}_hid{5}_it{6}_tr{7}_bat{8}_{9}.txt'.format(\
         dataset_type,scale_rating,''.join([m[0] for m in modality]),\
         firstThresh,secondThresh,hidden_dim,max_iter_over_dataset,\
-        train_datalen,minibatch_size)
+        train_datalen,minibatch_size,rand_filenum)
     outlogfile = os.path.join(outpath,output_log)
     model_filename = os.path.join(outpath,output_log.replace('LSTM_log',
-        'LSTM_').replace('.txt','.model'))
+        'LSTM_model').replace('.txt','.model'))
 
     # Preparing file to save the parameters and status
     with open(outlogfile,'wb') as fparam:    
         fparam.write('dataset_type={}'.format(dataset_type)+'\n')
         fparam.write('dataset_len={}'.format(train_datalen)+'\n')
+        fparam.write('test_dataset_len={}'.format(test_datalen)+'\n')
         fparam.write('minibat_len={}'.format(minibatch_size)+'\n')
         fparam.write('scale_rating={}'.format(scale_rating)+'\n')
         fparam.write('firstThresh={}'.format(firstThresh)+'\n')
@@ -217,43 +254,80 @@ def train_recurrent_models(
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
 
         # Build the model
-        print 'Loading Model (gputizing wvec) ...'
-        model = ttm.LSTM_TED_Rating_Predictor_wordonly(
-            hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
-            wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum)
-        ttdf.gputize(model,GPUnum)
-        # Training time
-        model.train()        
+        print 'Building the Neural Network Model ...'
+        if dataset_type == 'word-only':    
+            model = ttm.LSTM_TED_Rating_Predictor_wordonly(
+                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
+                wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum)            
+            # GPUTize the model
+            print 'gputizing model'
+            ttdf.gputize(model,GPUnum)        
+            # lossfunction
+            loss_fn = nn.BCEWithLogitsLoss()
+        elif dataset_type == 'averaged':
+            model = ttm.LSTM_TED_Rating_Predictor_Averaged(input_dim=train_dataset.dims,
+                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
+                gpuNum=GPUnum)
+            # lossfunction
+            loss_fn = nn.NLLLoss()
+        elif dataset_type == 'streamed':
+            model = ttm.LSTM_TED_Rating_Predictor_Averaged(input_dim=train_dataset.dims,
+                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
+                gpuNum=GPUnum)
+            # lossfunction
+            loss_fn = nn.NLLLoss()
         print 'done'
-        # lossfunction
-        loss_fn = nn.BCEWithLogitsLoss()
         # Initialize the optimizer
-        optimizer = optim.Adagrad(model.parameters(),lr = learning_rate)        
- 
-        # Iteration over the dataset
-        data_count = 0
+        optimizer = optimizer_fn(model.parameters(),lr = learning_rate)
+
+        # Multiple iteration over the training dataset
         old_time = time.time()
         for an_iter in range(max_iter_over_dataset):
-            # Constructing minibaches. With lots of experiment, finally using
-            # the first option as it is fast and convenient
+            # Constructing minibaches. 
+            # ------------------------
+            # While constructing the minibatch, the
+            # data also needs to be GPUtized. That is why it is time consuming.
+            # For word-only dataset type, I tried to preload 
+            # most of the information (word-vectors) in the GPU
+            # and passed only the word-indices for faster loading.
+            # I also tried several experiments to check faster loading option.
+            # I still need to do some more experiments.
+            # For now, the serial loading seems to be the fastest.
+            # TODO: Implement for averaged and streamed dataset.
             ##################### DEBUG 1 ###############
             # oldtime = time.time()
             #############################################
-            # Option 1
+            # Option 1: Fastest for now. Data is readily usable.
             minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
                 minibatch_size,GPUnum)
-            # Option 2
-            #minibatch_iter = ttdf.get_minibatch_iter_pooled(train_dataset,\
+            minibatch_iter_test = ttdf.get_minibatch_iter(test_dataset,\
+                minibatch_size,GPUnum)
+            # Option 2: Uses multiple processes, so, supposed to be fast.
+            # But not. Creating and destroying multiple processes have large
+            # overhead. Data is readily usable.
+            # minibatch_iter = ttdf.get_minibatch_iter_pooled(train_dataset,\
             #    minibatch_size,GPUnum)
-            # Option 3: Note: The data is packed
-            # minibatch_iter = ttdf.get_data_iter_simple(train_dataset,\
-            #    batch_size=minibatch_size,gpuNum=GPUnum)
+            # Option 3: Uses pytorch's Dataloader method. A bit faster. However,
+            # the data is packed. This option is unusable because
+            # packed data cannot be passed through the current model.
+            #minibatch_iter = ttdf.get_data_iter_simple(train_dataset,\
+            #    minibatch_size,GPUnum)
+            # Option 4, TO DO: I need to experiment if I use the pytorch's
+            # dataloader along with an unpacking the data to a usable form, does
+            # it speedup the training?
+            # Option 5, TO DO: If I do not preload the data into the GPU, and pass
+            # the complete data through dataloader, followed by the pytorch's
+            # implementation of LSTM (not LSTMCell), does it speedup the
+            # training?
             ##################### DEBUG 2 ###############
-            # print 'Elapsed time:',time.time()-oldtime
+            # print 'Time to construct minibach iterator:',time.time()-oldtime
             #############################################
 
-            # Training Loop
+            # ----------------------- Training Loop ---------------------------
             losslist=[]
+            data_count = 0
+            # Training time
+            model.train()
             for i,minibatch in enumerate(minibatch_iter):
                 model.zero_grad()
                 # Forward pass through the model                
@@ -264,6 +338,7 @@ def train_recurrent_models(
                 # Backpropagation of the gradients
                 lossval = loss.cpu().data.numpy()
                 loss.backward()
+
                 # Parameter update
                 optimizer.step()
 
@@ -271,27 +346,66 @@ def train_recurrent_models(
                 data_count += len(minibatch)
                 ratio_trained = float(data_count)/float(train_datalen)
                 losslist.append(lossval)
-                status_msg='train:{0},Loss:{1:0.6},batch:{2}'
-                status_msg+='Data_per:{3:0.2}%,Data_count:{4},iter_time:{5:0.4}'
+                status_msg='train:{0},Loss:{1:0.6},batch:{2},'
+                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5:4.0}'
                 status_msg=status_msg.format(an_iter,lossval,i,\
-                    ratio_trained*100,data_count,time.time()-old_time)
+                    ratio_trained*100,data_count,time.time()-old_time,'f')
 
                 print status_msg
                 fparam.write(status_msg + '\n')
             # Write the average loss of last iteration
             meanloss = np.nanmean(losslist)
-            status_msg = 'Average loss:{0}\n'.format(meanloss)
+            status_msg = 'Average Train loss:{0}'.format(meanloss)
             print status_msg
-            fparam.write(status_msg)
+            print
+            fparam.write(status_msg + '\n' + '\n')
             fparam.flush()
+            os.fsync(fparam.fileno())
 
-            # # Save the model every iteration for safety
-            # if an_iter%10==9:
-            #     torch.save(model.cpu(),open(model_filename,'wb'))
-            #     ttdf.gputize(model,GPUnum)
+            # ----------------------- Test Loop ---------------------------
+            losslist_test=[]
+            data_count_test = 0                        
+            model.eval()
+            for i,minibatch_test in enumerate(minibatch_iter_test):
+                # Grad calculation and optimizer is not required.
+                with torch.no_grad():
+                    # Forward pass through the model                
+                    log_probs = model(minibatch_test)
+                    # Calculate the loss
+                    loss_test = __compute_loss__(log_probs,minibatch_test,loss_fn)
+                    lossval_test = loss_test.cpu().data.numpy()
+            
+                # Logging the current status
+                data_count_test += len(minibatch_test)
+                ratio_trained = float(data_count_test)/float(train_datalen)
+                losslist_test.append(lossval_test)
+                status_msg='test:{0},Loss:{1:0.6},batch:{2},'
+                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5:4.0}'
+                status_msg=status_msg.format(an_iter,lossval_test,i,\
+                    ratio_trained*100,data_count_test,time.time()-old_time,'f')
+                print status_msg
+                fparam.write(status_msg + '\n')
+            # Write the average loss of last iteration
+            meanloss = np.nanmean(losslist_test)
+            status_msg = 'Average Test loss:{0}'.format(meanloss)
+            print status_msg
+            print
+            fparam.write(status_msg + '\n' + '\n')
+            fparam.flush()
+            os.fsync(fparam.fileno())
 
-        # Save the model
-        torch.save(model.cpu(),open(model_filename,'wb'))
+            #  After every training/test iteration, save the model weights for safety.
+            #     torch.save(model.state_dict(),open(model_filename,'wb'))
+
+        # Save the model weights
+        torch.save(model.state_dict(),open(model_filename,'wb'))
+
+def resume_recurrent_training():
+    '''
+    Given an LSTM_log and corresponding LSTM_model file,
+    resume the training/testing loop from last iteration.
+    '''
+    raise NotImplementedError
 
 def __compute_loss__(log_probs,minibatch,loss_fn):
     losslist = []
