@@ -64,6 +64,14 @@ def __tonum__(astr):
     except ValueError:
         return astr
 
+def prs(aline):
+    retval = {}
+    for afield in aline.split(','):
+        if ':' in afield:
+            k,v = afield.split(':')
+            retval.update({k:__tonum__(v)})
+    return retval
+
 def read_lstm_log(afile,averageonly=True):
     '''
     Reads the contents of LSTM_log files.
@@ -77,71 +85,89 @@ def read_lstm_log(afile,averageonly=True):
                 logdata[k]=__tonum__(v)
             elif averageonly and aline.startswith('train'):
                 traintest = 'train'
-                time = float(aline.split(',')[-1].split(':')[-1])
+                linedic = prs(aline)
+                time = linedic['iter_time']                
+                itno = int(linedic['train'])
             elif averageonly and aline.startswith('test'):
                 traintest = 'test'
-                time = float(aline.split(',')[-1].split(':')[-1])
+                time = linedic['iter_time']
+                itno = int(linedic['train'])
             elif averageonly and aline.startswith('Average loss'):
                 avgloss = float(aline.split(':')[-1])
-                logdata.setdefault(traintest,[]).append([time,avgloss])
+                logdata.setdefault(traintest,[]).append([itno,time,avgloss])
+            elif averageonly and aline.startswith('Average Train loss'):
+                avgloss = float(aline.split(':')[-1])
+                logdata.setdefault('train',[]).append([itno,time,avgloss])
+            elif averageonly and aline.startswith('Average Test loss'):
+                avgloss = float(aline.split(':')[-1])
+                logdata.setdefault('test',[]).append([itno,time,avgloss])        
             elif not averageonly and aline.startswith('train'):
-                linedat = {afield.split(':')[0]:float(afield.split(':')[-1])\
-                    for afield in aline.split(',') \
-                        if type(__tonum__(afield.split(':')[-1]))==float}
-                logdata.setdefault('train',[]).append([linedat['iter_time'],\
-                    linedat['Loss']])
+                linedat = prs(aline)
+                logdata.setdefault('train',[]).append([linedat['train'],\
+                    linedat['iter_time'],linedat['Loss']])
             elif not averageonly and aline.startswith('test'):
-                linedat = {afield.split(':')[0]:float(afield.split(':')[-1])\
-                    for afield in aline.split(',') \
-                        if type(__tonum__(afield.split(':')[-1]))==float}
-                logdata.setdefault('test',[]).append([linedat['iter_time'],\
-                    linedat['Loss']])
+                linedat = prs(aline)
+                logdata.setdefault('test',[]).append([linedat['test'],\
+                    linedat['iter_time'],linedat['Loss']])
     return logdata
 
 def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     outfile='summary_plot_LSTM_log.pdf',ignoredfields = \
-    ['train','test','train_indices','test_indices','model_outfile','gpunum'],\
-    markers = ['','.','o','^','+','v','_',',','*','<','s','>','|','x']):
+    ['train','test','train_indices','test_indices',\
+    'model_outfile','gpunum','modality'],\
+    markers = ['','.','+','|','x','*','_','^','v','<','s','>','o']):
     '''
     Summarize all the LSTM training logs with a single figure
     '''
     filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',prefix+'*'))
-    outfilename = os.path.join(ted_data_path,'TED_stats/',outfile)
+    fpath,fname = os.path.split(outfile)
+    fname,fext = fname.split('.')
+    outfilename_time = os.path.join(ted_data_path,'TED_stats/',\
+        os.path.join(fpath,fname+'_iter_time'+'.'+fext))
+    outfilename_iter = os.path.join(ted_data_path,'TED_stats/',\
+        os.path.join(fpath,fname+'_iter_no'+'.'+fext))
     alldata={}
-    for afile in filenames:
+    for i,afile in enumerate(filenames):
         filedata = read_lstm_log(afile,averageonly)
         for akey in filedata:
-            alldata.setdefault(akey,[]).append(filedata[akey])
+            alldata.setdefault(akey,{}).update({i:filedata[akey]})
+
     # Isolate the parameters with unique and non-unique values
     unique=[]
     nonunique=[]
     for akey in alldata:
-        if not akey in ignoredfields and len(set(alldata[akey]))==1:
+        if not akey in ignoredfields and len(set(alldata[akey].values()))==1:
             unique.append(akey)
-        elif not akey in ignoredfields and len(set(alldata[akey]))>1:
+        elif not akey in ignoredfields and len(set(alldata[akey].values()))>1:
             nonunique.append(akey)
-    import pdb; pdb.set_trace()  # breakpoint b0e649d8 //
     
-    # Make legends for the nonunique parameters and draw iter vs loss plot
-    fig=plt.figure(0,figsize=(8.8, 4.8))
-    plt.clf()
+    # Make legends for the nonunique parameters 
+    legendtxts=[]
     for i in range(len(filenames)):
         print filenames[i]
         alegend=''
-        # make legends
+        # make legends for non-unique params
         for j,akey in enumerate(nonunique):
-            alegend+='{}={}'.format(akey,alldata[akey][i])
+            if akey in alldata and i in alldata[akey]:
+                alegend+='{}={}'.format(akey,alldata[akey][i])
             if j<len(nonunique)-1:
                 alegend+=','
-        # draw plots
-        trainloss = np.array(alldata['train'][i])
-        plt.plot(trainloss[:,0]/3600.,trainloss[:,1],color='blue',\
+        legendtxts.append(alegend)
+
+    # Draw iter time vs loss plot
+    fig=plt.figure(0,figsize=(8.8, 4.8))
+    plt.clf()
+    for i,alegend in zip(range(len(filenames)),legendtxts):
+        trainloss = np.array(alldata['train'][i])        
+        plt.plot(trainloss[:,1]/3600.,trainloss[:,2],color='blue',\
             marker=markers[i],label='Train,'+alegend)
-        if 'test' in alldata:
+        if 'test' in alldata and i in alldata['test']:
             testloss = np.array(alldata['test'][i])
-            plt.plot(testloss[:,0]/3600.,testloss[:,1],\
+            plt.plot(testloss[:,1]/3600.,testloss[:,2],\
                 color='red',marker=markers[i],label='Test,'+alegend)
-    plt.grid('on',which='both')
+
+    plt.grid('on',which='major')
+    plt.grid('on',which='minor')
     plt.xlabel('Iteration time (hour)')
     if averageonly:
         plt.ylabel('Average loss (in an iteration over dataset)')
@@ -149,13 +175,38 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         plt.ylabel('Loss per minibatch')
     plt.legend()
     plt.tight_layout()
-    plt.savefig(outfilename)
+    plt.savefig(outfilename_time)
     plt.close()
-    print 'Loss figure saved in:',outfilename
+
+    # draw iter vs loss plot
+    fig=plt.figure(0,figsize=(8.8, 4.8))
+    plt.clf()
+    for i,alegend in zip(range(len(filenames)),legendtxts):
+        # draw plots
+        trainloss = np.array(alldata['train'][i])
+        plt.plot(trainloss[:,0],trainloss[:,2],color='blue',\
+            marker=markers[i],label='Train,'+alegend)
+        if 'test' in alldata and i in alldata['test']:
+            testloss = np.array(alldata['test'][i])
+            plt.plot(testloss[:,0],testloss[:,2],\
+                color='red',marker=markers[i],label='Test,'+alegend)
+    plt.grid('on',which='major')
+    plt.grid('on',which='minor')
+    plt.xlabel('Iterations')
+    if averageonly:
+        plt.ylabel('Average loss (in an iteration over dataset)')
+    else:
+        plt.ylabel('Loss per minibatch')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(outfilename_iter)
+    plt.close()    
+    print 'Loss figure saved in:',outfilename_iter
+
     # Print the unique parameters
     print 'Other Common parameters:'
     for akey in unique:
-        print akey,'=',set(alldata[akey]).pop()
+        print akey,'=',set(alldata[akey].values()).pop()
     print 'Blue is Train'
     print 'Red is Test'
 

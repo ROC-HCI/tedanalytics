@@ -157,28 +157,34 @@ def train_recurrent_models(
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
-    minibatch_size = 50,
-    hidden_dim = 128,
+    minibatch_size = 10,
+    hidden_dim = 256,
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adagrad,
-    learning_rate = 0.01,
-    max_iter_over_dataset = 1000,
+    learning_rate = 0.005,
+    max_iter_over_dataset = 80,
     GPUnum = 0):
     '''
     Trains the LSTM models using sequential datasets.
     
-    Note: currently only 'word-only' dataset is allowed.
+    **Currently only 'word-only' dataset is allowed.**
     
     Output:
     1) A log file LSTM_log_ ... <random_number>.txt
     2) A model weight file LSTM_model_ ... <random_number>.model
+    3) A model weight file LSTM_model_ ... <random_number>_final.model
+    
     The random_number part for these two corresponding files will be same
     but they will be different in different run. The first file contains
     the training/testing status. The second file contains the neural weights
-    of the LSTM network.
+    of the LSTM network. The third file contains the final model weights after
+    all iterations are done.
 
-    Note 2: the model file only saves the state_dict of the network. 
+    Note: The other model file (file#2) is saved only when the test loss
+    becomes lower than any previous test loss value.
+
+    Note 2: the model files only store the state_dict of the network. 
     So, in the loading time, the model must be initiated correctly from the
     code BEFORE loading the weights from disk. The class name from which
     the model is instantiated is saved in the LSTM_log as "modelclassname".
@@ -191,7 +197,7 @@ def train_recurrent_models(
         ################ DEBUG * REMOVE ###############
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        # test_id = test_id[:5]
+        #test_id = test_id[:5]
         #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
         ###############################################
@@ -227,6 +233,8 @@ def train_recurrent_models(
     outlogfile = os.path.join(outpath,output_log)
     model_filename = os.path.join(outpath,output_log.replace('LSTM_log',
         'LSTM_model').replace('.txt','.model'))
+    spl = model_filename.split('.')
+    finalmodelfile = '.'.join(spl[:-1])+'_final.'+spl[-1]
 
     # Build the model
     print 'Building the Neural Network Model ...'
@@ -268,6 +276,7 @@ def train_recurrent_models(
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')        
 
         # Multiple iteration over the training dataset
+        min_train_loss = np.inf 
         old_time = time.time()
         for an_iter in range(max_iter_over_dataset):
             # Constructing minibaches. 
@@ -334,10 +343,9 @@ def train_recurrent_models(
                 ratio_trained = float(data_count)/float(train_datalen)
                 losslist.append(lossval)
                 status_msg='train:{0},Loss:{1:0.6},batch:{2},'
-                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5:4.0}'
+                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5}'
                 status_msg=status_msg.format(an_iter,lossval,i,\
                     ratio_trained*100,data_count,time.time()-old_time,'f')
-
                 print status_msg
                 fparam.write(status_msg + '\n')
             # Write the average loss of last iteration
@@ -367,7 +375,7 @@ def train_recurrent_models(
                 ratio_trained = float(data_count_test)/float(train_datalen)
                 losslist_test.append(lossval_test)
                 status_msg='test:{0},Loss:{1:0.6},batch:{2},'
-                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5:4.0}'
+                status_msg+='Data_fed:{3:3.2}%,count:{4},iter_time:{5}'
                 status_msg=status_msg.format(an_iter,lossval_test,i,\
                     ratio_trained*100,data_count_test,time.time()-old_time,'f')
                 print status_msg
@@ -381,11 +389,14 @@ def train_recurrent_models(
             fparam.flush()
             os.fsync(fparam.fileno())
 
-            #  After every training/test iteration, save the model weights for safety.
-            torch.save(model.state_dict(),open(model_filename,'wb'))
-            
+            #  If the test loss decreases than the minimum test loss, 
+            # save the model weights for safety.
+            if lossval_test<min_train_loss:
+                min_train_loss = lossval_test
+                torch.save(model.state_dict(),open(model_filename,'wb'))
+
         # Save the model weights after training/test loop is finished
-        torch.save(model.state_dict(),open(model_filename,'wb'))
+        torch.save(model.state_dict(),open(finalmodelfile,'wb'))
 
 def resume_recurrent_training():
     '''
