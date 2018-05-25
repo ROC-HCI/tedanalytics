@@ -159,7 +159,6 @@ def train_recurrent_models(
     scale_rating = True,
     minibatch_size = 50,
     hidden_dim = 128,
-    modality=['word','audio','pose','face'],
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adagrad,
@@ -168,10 +167,9 @@ def train_recurrent_models(
     GPUnum = 0):
     '''
     Trains the LSTM models using sequential datasets.
-    For word-only dataset type, modality is irrelevant.
-    For other dataset types, ('averaged','streamed') modality can
-    take any or all of 'word','audio','pose','face'. 
-    Note: averaged and streamed pipeline is not completely implemented yet.
+    
+    Note: currently only 'word-only' dataset is allowed.
+    
     Output:
     1) A log file LSTM_log_ ... <random_number>.txt
     2) A model weight file LSTM_model_ ... <random_number>.model
@@ -179,25 +177,17 @@ def train_recurrent_models(
     but they will be different in different run. The first file contains
     the training/testing status. The second file contains the neural weights
     of the LSTM network.
+
+    Note 2: the model file only saves the state_dict of the network. 
+    So, in the loading time, the model must be initiated correctly from the
+    code BEFORE loading the weights from disk. The class name from which
+    the model is instantiated is saved in the LSTM_log as "modelclassname".
     '''
     # Prepare trining and test split
     train_id,test_id = ttdf.split_train_test(train_test_ratio)
     # Select correct dataset
-    if dataset_type == 'averaged':
-        train_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=train_id,
-            firstThresh = firstThresh, secondThresh = secondThresh,
-            scale_rating = scale_rating,modality=modality)
-        test_dataset = ttdf.TED_Rating_Averaged_Dataset(data_indices=test_id,
-            firstThresh = firstThresh, secondThresh = secondThresh,
-            scale_rating = scale_rating,modality=modality)
-    elif dataset_type == 'streamed':
-        train_dataset = ttdf.TED_Rating_Streamed_Dataset(data_indices=train_id,
-            firstThresh = firstThresh, secondThresh = secondThresh,
-            scale_rating = scale_rating,modality=modality)
-        test_dataset = ttdf.TED_Rating_Streamed_Dataset(data_indices=test_id,
-            firstThresh = firstThresh, secondThresh = secondThresh,
-            scale_rating = scale_rating,modality=modality)
-    elif dataset_type == 'word-only':
+
+    if dataset_type == 'word-only':
         ################ DEBUG * REMOVE ###############
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
@@ -212,10 +202,13 @@ def train_recurrent_models(
         test_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=test_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
-            flatten_sentence=False)
+            flatten_sentence=False)    
+    else:
+        raise NotImplementedError('Currently "word-only" is the only supported dataset_type')
+    
+    # Length of the training and test (held out) dataset
     train_datalen = len(train_dataset)
     test_datalen = len(test_dataset)
-
     print 'Training Dataset Length:',train_datalen
     print 'Test Dataset Length:',test_datalen
 
@@ -227,13 +220,29 @@ def train_recurrent_models(
     # different runs different. Note that the log file and the 
     rand_filenum = np.random.rand()
     output_log = \
-    'LSTM_log_ty{0}_s{1}_{2}_{3}_{4}_hid{5}_it{6}_tr{7}_bat{8}_{9}.txt'.format(\
-        dataset_type,scale_rating,''.join([m[0] for m in modality]),\
-        firstThresh,secondThresh,hidden_dim,max_iter_over_dataset,\
-        train_datalen,minibatch_size,rand_filenum)
+    'LSTM_log_typ{0}_s{1}_{2}_{3}_hid{4}_it{5}_tr{6}_bat{7}_{8}.txt'.format(\
+        dataset_type,scale_rating,firstThresh,secondThresh,\
+        hidden_dim,max_iter_over_dataset,train_datalen,\
+        minibatch_size,rand_filenum)
     outlogfile = os.path.join(outpath,output_log)
     model_filename = os.path.join(outpath,output_log.replace('LSTM_log',
         'LSTM_model').replace('.txt','.model'))
+
+    # Build the model
+    print 'Building the Neural Network Model ...'
+    if dataset_type == 'word-only':    
+        model = ttm.LSTM_TED_Rating_Predictor_wordonly(
+            hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
+            wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum) 
+        # GPUTize the model
+        print 'gputizing model'
+        ttdf.gputize(model,GPUnum)        
+        # lossfunction is related with the model
+        loss_fn = nn.BCEWithLogitsLoss()
+    print 'done'
+
+    # Initialize the optimizer
+    optimizer = optimizer_fn(model.parameters(),lr = learning_rate)
 
     # Preparing file to save the parameters and status
     with open(outlogfile,'wb') as fparam:    
@@ -248,37 +257,15 @@ def train_recurrent_models(
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
         fparam.write('learning_rate={}'.format(learning_rate)+'\n')
         fparam.write('model_outfile={}'.format(model_filename)+'\n')
+        fparam.write('modelclassname={}'.format(model.__class__.__name__)+'\n')
+        fparam.write('modelclass={}'.format(str(model.__class__))+'\n')
+        fparam.write('optimizerclassname={}'.format(optimizer.__class__.__name__)+'\n')
+        fparam.write('optimizerclass={}'.format(str(optimizer.__class__))+'\n')        
+        fparam.write('lossclassname={}'.format(loss_fn.__class__.__name__)+'\n')
+        fparam.write('lossclass={}'.format(str(loss_fn.__class__))+'\n')        
         fparam.write('gpunum={}'.format(GPUnum)+'\n')
-        fparam.write('modality={}'.format(json.dumps(modality))+'\n')
         fparam.write('train_indices={}'.format(json.dumps(train_id))+'\n')
-        fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')
-
-        # Build the model
-        print 'Building the Neural Network Model ...'
-        if dataset_type == 'word-only':    
-            model = ttm.LSTM_TED_Rating_Predictor_wordonly(
-                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
-                wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum)            
-            # GPUTize the model
-            print 'gputizing model'
-            ttdf.gputize(model,GPUnum)        
-            # lossfunction
-            loss_fn = nn.BCEWithLogitsLoss()
-        elif dataset_type == 'averaged':
-            model = ttm.LSTM_TED_Rating_Predictor_Averaged(input_dim=train_dataset.dims,
-                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
-                gpuNum=GPUnum)
-            # lossfunction
-            loss_fn = nn.NLLLoss()
-        elif dataset_type == 'streamed':
-            model = ttm.LSTM_TED_Rating_Predictor_Averaged(input_dim=train_dataset.dims,
-                hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
-                gpuNum=GPUnum)
-            # lossfunction
-            loss_fn = nn.NLLLoss()
-        print 'done'
-        # Initialize the optimizer
-        optimizer = optimizer_fn(model.parameters(),lr = learning_rate)
+        fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')        
 
         # Multiple iteration over the training dataset
         old_time = time.time()
@@ -395,9 +382,9 @@ def train_recurrent_models(
             os.fsync(fparam.fileno())
 
             #  After every training/test iteration, save the model weights for safety.
-            #     torch.save(model.state_dict(),open(model_filename,'wb'))
-
-        # Save the model weights
+            torch.save(model.state_dict(),open(model_filename,'wb'))
+            
+        # Save the model weights after training/test loop is finished
         torch.save(model.state_dict(),open(model_filename,'wb'))
 
 def resume_recurrent_training():
