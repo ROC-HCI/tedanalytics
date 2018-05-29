@@ -157,12 +157,12 @@ def train_recurrent_models(
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
-    minibatch_size = 10,
-    hidden_dim = 256,
+    minibatch_size = 30,
+    hidden_dim = 128,
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adagrad,
-    learning_rate = 0.005,
+    learning_rate = 0.01,
     max_iter_over_dataset = 80,
     GPUnum = 0):
     '''
@@ -276,7 +276,7 @@ def train_recurrent_models(
         fparam.write('test_indices={}'.format(json.dumps(test_id))+'\n')        
 
         # Multiple iteration over the training dataset
-        min_train_loss = np.inf 
+        min_test_loss = np.inf 
         old_time = time.time()
         for an_iter in range(max_iter_over_dataset):
             # Constructing minibaches. 
@@ -391,8 +391,8 @@ def train_recurrent_models(
 
             #  If the test loss decreases than the minimum test loss, 
             # save the model weights for safety.
-            if lossval_test<min_train_loss:
-                min_train_loss = lossval_test
+            if lossval_test<min_test_loss:
+                min_test_loss = lossval_test
                 torch.save(model.state_dict(),open(model_filename,'wb'))
 
         # Save the model weights after training/test loop is finished

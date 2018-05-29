@@ -63,9 +63,9 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     cp.dump(results,open(outfilename+'.pkl','wb'))
     return results
 
-def evaluate_recurrent_model():
+def evaluate_recurrent_models():
     '''
-    TODO: Implement evaluation code for LSTM models that take sequential datasets.
+    Evaluation code for LSTM models that take sequential datasets.
     '''
     raise NotImplementedError
 

@@ -119,7 +119,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     '''
     Summarize all the LSTM training logs with a single figure
     '''
-    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',prefix+'*'))
+    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',prefix+'*'))    
     fpath,fname = os.path.split(outfile)
     fname,fext = fname.split('.')
     outfilename_time = os.path.join(ted_data_path,'TED_stats/',\
@@ -127,7 +127,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     outfilename_iter = os.path.join(ted_data_path,'TED_stats/',\
         os.path.join(fpath,fname+'_iter_no'+'.'+fext))
     alldata={}
-    for i,afile in enumerate(filenames):
+    for i,afile in enumerate(filenames):        
         filedata = read_lstm_log(afile,averageonly)
         for akey in filedata:
             alldata.setdefault(akey,{}).update({i:filedata[akey]})
