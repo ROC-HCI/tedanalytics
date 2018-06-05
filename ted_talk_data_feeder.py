@@ -174,9 +174,7 @@ def read_prosody_feat(talklist=lst_talks.all_valid_talks,
     labels = None
     for atalk in talklist:
         pklname = os.path.join(pathname,str(atalk)+'.pkl')
-        if not os.path.exists(pklname):
-            import pdb; pdb.set_trace()  # breakpoint 7c553e1d //
-            
+        if not os.path.exists(pklname):            
             print 'Not found',atalk
             continue
         data = cp.load(open(pklname))

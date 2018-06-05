@@ -530,25 +530,28 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10,
     if 'pose' in modality:
         X,label = ttdf.concat_features(X,label,*ttdf.read_openpose_feat())
         print 'Openpose features read'
+
     # Add facial features
     if 'face' in modality:
         X,label = ttdf.concat_features(X,label,*ttdf.read_openface_feat())
         print 'Openface features read'
+
     # Add sentiment features
     if 'trajectory' in modality:
         X,label = ttdf.concat_features(X,label,\
             *ttdf.read_sentiment_feat(X.keys()))
         print 'Trajectory features read'
+
     # Add Prosody features
     if 'audio' in modality:
         X,label = ttdf.concat_features(X,label,*ttdf.read_prosody_feat(X.keys()))
         print 'Prosody features read'
+    
     # Add Lexical features
     if 'lexical' in modality:
         X,label = ttdf.concat_features(X,label,*ttdf.read_lexical_feat(X.keys()))
         print 'Lexical features read'
     print 'Complete'
-    import pdb; pdb.set_trace()  # breakpoint 2eda4e0c //
 
     # Train-Test set preparation
     tridx,tstidx = ttdf.split_train_test(talklist=X.keys())
