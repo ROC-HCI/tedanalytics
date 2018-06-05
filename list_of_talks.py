@@ -23,7 +23,7 @@ rating_labels = sorted(['beautiful','funny','ingenious','ok','fascinating',
 # This is a hand curated test set of 150 datapoints. It was randomly sampled
 # from the dataset with a constraint that there is at least 2 ratings for each
 # type of rating.
-test_set = set([ 233,  665,  263,  195,  660,   75, 1315, 1090, 1944,  614, 1565,
+test_set = set([ 233,  665,  263,  195,  660,  75, 1315, 1090, 1944,  614, 1565,
         216, 1404, 1633,  516,  483, 1621, 1030,  587, 1326, 2339, 1175,
        1411, 2681, 1034, 1495,  974, 1875, 1985, 1184, 1370, 1008, 1687,
        1575,  869,   41, 1559,  965,  248,   87, 1999, 2704, 2588, 1257,
@@ -45,11 +45,13 @@ test_set = set([ 233,  665,  263,  195,  660,   75, 1315, 1090, 1944,  614, 1565
 reader = csv.DictReader(open('./index.csv','rU'))
 all_valid_talks = []
 all_ratings = {}
+test_set_ratings={}
 for arow in reader:
     if arow['Is_a_Talk?']=='Yes':
         atalk = int(arow['Video_ID'])
         # Skip the talks in the test set. This data is hidden for the final result.
         if test_set and atalk in test_set:
+            test_set_ratings[atalk]={ratings:int(arow[ratings]) for ratings in rating_labels}
             continue
         all_valid_talks.append(atalk)
         all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}

@@ -72,16 +72,29 @@ def prs(aline):
             retval.update({k:__tonum__(v)})
     return retval
 
+def __get_rand_id__(filename):
+    spltfile = filename.split('.')
+    if len(spltfile)>2 and len(spltfile[-2])>=12 and \
+        type(__tonum__(spltfile[-2]))==float:
+        return int(spltfile[-2])
+    else:
+        return None
+
 def read_lstm_log(afile,averageonly=True):
     '''
     Reads the contents of LSTM_log files.
     '''
     logdata={}
     with open(afile) as fin:
+        logdata['id']=__get_rand_id__(afile)
         for aline in fin:
             aline = aline.strip()
             if '=' in aline and not 'count' in aline:
-                k,v = aline.split('=')
+                try:
+                    k,v = aline.split('=')
+                except:
+                    import pdb; pdb.set_trace()  # breakpoint 7c5c07cd //
+                    
                 logdata[k]=__tonum__(v)
             elif averageonly and aline.startswith('train'):
                 traintest = 'train'
@@ -189,7 +202,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         if 'test' in alldata and i in alldata['test']:
             testloss = np.array(alldata['test'][i])
             plt.plot(testloss[:,0],testloss[:,2],\
-                color='red',marker=markers[i],label='Test,'+alegend)
+                color='red',marker=markers[i],label='Dev,'+alegend)
     plt.grid('on',which='major')
     plt.grid('on',which='minor')
     plt.xlabel('Iterations')

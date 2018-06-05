@@ -1,9 +1,18 @@
+import os
+import json
 import numpy as np
 import cPickle as cp
 import sklearn.metrics as met
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+import torch
+import torch.nn.functional as F
+import ted_talk_data_feeder as ttdf
+import ted_talk_results as ttr
+import ted_talk_models as ttm
+import list_of_talks
 
 
 
@@ -63,11 +72,78 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     cp.dump(results,open(outfilename+'.pkl','wb'))
     return results
 
-def evaluate_recurrent_models():
+
+def evaluate_recurrent_models(logfilename,test_id=list_of_talks.test_set):
     '''
     Evaluation code for LSTM models that take sequential datasets.
     '''
-    raise NotImplementedError
+    modelfilename = logfilename.replace('LSTM_log','LSTM_model').replace('.txt','.model')
+    if not os.path.exists(modelfilename):
+        raise IOError('{} does not exist'.format(modelfilename))
+    # create output file
+    output1 = logfilename.replace('LSTM_log','LSTM_results_dev').replace('.txt','.pkl')
+    output2 = logfilename.replace('LSTM_log','LSTM_results_finaltest').replace('.txt','.pkl')
+    # Load log data and model
+    logdata = ttr.read_lstm_log(logfilename)
+    # Model will be loaded in the cpu
+    model = ttm.load_model(modelfilename,logdata['modelclassname'],'cpu')    
+    model.eval()
+
+    #--------------- Evaluate using the held-out dataset ------------------
+    print 'Results with Dev dataset:'
+    print '========================='
+    logdata['test_indices'] = json.loads(logdata['test_indices'])
+    results1 = get_results(logdata,model,logdata['test_indices'])
+    results1.update(logdata)
+    cp.dump(results1,open(output1,'wb'))
+    #---------------- Evaluate using the final test dataset ----------------
+    print 'Results with held-out final test dataset:'
+    print '========================================='
+    results2 = get_results(logdata,model,test_id)
+    logdata['test_indices']=test_id
+    results2.update(logdata)
+    cp.dump(results2,open(output2,'wb'))
+    print 'results saved in:'
+    print output1
+    print output2
+
+def get_results(logdata,model,test_indices):
+    if logdata['dataset_type'] == 'word-only':
+        test_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
+            data_indices = test_indices,
+            firstThresh = logdata['firstThresh'],
+            secondThresh = logdata['secondThresh'],
+            scale_rating = bool(logdata['scale_rating']),
+            flatten_sentence=False,access_hidden_test=list_of_talks.test_set==test_indices)    
+    else:
+        raise NotImplementedError('Currently "word-only" is the only supported dataset_type')    
+    
+    # Load minibatch in cpu
+    minibatch_iter = ttdf.get_minibatch_iter(test_dataset,20,-1)
+    
+    # get model predictions
+    y_score=[]
+    y_gt=[]
+    y_predict=[]
+    test_losses=[]
+    for i,minibatch in enumerate(minibatch_iter):
+        # Get prediction probability from the model
+        with torch.no_grad():
+            model_output = model(minibatch)
+            if logdata['lossclassname']=='BCEWithLogitsLoss':
+                # BCEWithLogitsLoss applies the sigmoid within the loss function
+                temp = map(lambda x:F.sigmoid(x.squeeze()).numpy().tolist(),\
+                    model_output)
+            else:
+                temp = map(lambda x:x.squeeze().numpy().tolist(),model_output)
+        pred = map(lambda x:[float(an_x>0.5) for an_x in x],temp)
+        a_gt = [an_item['Y'].numpy().squeeze().tolist() for an_item in minibatch]
+        y_score.extend(temp)
+        y_predict.extend(pred)
+        y_gt.extend(a_gt)
+        print 'processed:',(i+1)*20,'out of',len(test_dataset)
+    results = __classifier_eval__(y_gt,y_predict,y_score,test_dataset.ylabel)    
+    return results
 
 def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
     outfilename='',bypass_ROC=True):

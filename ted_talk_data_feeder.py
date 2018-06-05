@@ -76,24 +76,31 @@ def get_dep_rating(talk_id,scale_rating=True):
         alldat.append(adep)
     return alldat,y,ratedict_processed
 
-def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True):
+def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
+    read_hidden_test_set=False):
     '''
     Divides the ground truth ratings into two classes for classification.
     Returns the binarized labels, the median values, and the label of each
     column of y.
     '''
+    valid_talks = lst_talks.all_valid_talks
+    valid_ratings = lst_talks.all_ratings.copy()
+    if read_hidden_test_set:
+        print 'Warning: Accessing the hidden test set'
+        valid_talks = lst_talks.all_valid_talks + lst_talks.test_set
+        valid_ratings.update(lst_talks.test_set_ratings)
     y_gt = []
     # Read ratings from all the talks
     labels = [label for label in lst_talks.rating_labels \
         if not label=='total_count']
-    for atalk in lst_talks.all_valid_talks:
+    for atalk in valid_talks:
         y=[]
         for akey in lst_talks.rating_labels:
             if not akey=='total_count' and scale_rating:
-                y.append(float(lst_talks.all_ratings[atalk][akey])/float(\
-                    lst_talks.all_ratings[atalk]['total_count']))
+                y.append(float(valid_ratings[atalk][akey])/float(\
+                    valid_ratings[atalk]['total_count']))
             elif not akey=='total_count' and not scale_rating:
-                y.append(float(lst_talks.all_ratings[atalk][akey]))
+                y.append(float(valid_ratings[atalk][akey]))
         y_gt.append(y)
     # Convert into a numpy array
     y_gt = np.array(y_gt)
@@ -109,10 +116,10 @@ def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True):
     # Convert to dictionary for convenience
     if firstThresh == secondThresh:
         return {key:val.tolist() for key,val in \
-            zip(lst_talks.all_valid_talks,y_gt)},thresh1,labels
+            zip(valid_talks,y_gt)},thresh1,labels
     else:
         return {key:val.tolist() for key,val in \
-            zip(lst_talks.all_valid_talks,y_gt)},thresh1,labels,thresh2
+            zip(valid_talks,y_gt)},thresh1,labels,thresh2
 
 def read_openpose_feat(csv_name =
     'TED_feature_openpose/summary_presenter_openpose_features_0.65.csv'):
@@ -158,7 +165,7 @@ def read_openface_feat(csv_name =
     return X,labels
 
 def read_prosody_feat(talklist=lst_talks.all_valid_talks,
-    foldername = 'TED_feature_prosody/full_video'):
+    foldername = 'TED_feature_prosody/full_video_summary'):
     '''
     Reads the prosody features for each video
     '''
@@ -168,6 +175,8 @@ def read_prosody_feat(talklist=lst_talks.all_valid_talks,
     for atalk in talklist:
         pklname = os.path.join(pathname,str(atalk)+'.pkl')
         if not os.path.exists(pklname):
+            import pdb; pdb.set_trace()  # breakpoint 7c553e1d //
+            
             print 'Not found',atalk
             continue
         data = cp.load(open(pklname))
@@ -685,11 +694,12 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
     """
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
-            secondThresh=50.,scale_rating=True,flatten_sentence=False):
+            secondThresh=50.,scale_rating=True,flatten_sentence=False,
+            access_hidden_test=False):
 
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
-            secondThresh,scale_rating)
+            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
         ################ DEBUG * REMOVE ###############

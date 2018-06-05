@@ -11,14 +11,70 @@ import numpy as np
 from TED_data_location import ted_data_path, wordvec_path
 import ted_talk_data_feeder as ttdf
 
+class ModelIO():
+    '''
+    The ModelIO class implements a load() and a save() method that
+    makes model loading and saving easier. Using these functions not
+    only saves the state_dict but other important parameters as well from
+    __dict__. If you instantiate from this class, please make sure all the
+    required arguments of the __init__ method are actually saved in the class
+    (i.e. self.<param> = param). 
+    That way, it is possible to load a model with the default parameters and
+    then change the parameters to correct values from stored in the disk.
+    '''
+    ignore_keys = ['_backward_hooks','_forward_pre_hooks','_backend',\
+        '_forward_hooks']#,'_modules','_parameters','_buffers']
+    def save(self, fout):
+        '''
+        Save the model parameters (both from __dict__ and state_dict())
+        @param fout: It is a file like object for writing the model contents.
+        '''
+        model_content={}
+        # Save internal parameters
+        for akey in self.__dict__:
+            if not akey in self.ignore_keys:
+                model_content.update(self.__dict__)
+        # Save state dictionary
+        model_content['state_dict']=self.state_dict()
+        torch.save(model_content,fout)
 
-class multiLinear(nn.Module):
+    def load(self,fin,map_location=None):
+        '''
+        Loads the parameters saved using the save method
+        @param fin: It is a file-like obkect for reading the model contents.
+        @param map_location: map_location parameter from
+        https://pytorch.org/docs/stable/torch.html#torch.load
+        Note: although map_location can move a model to cpu or gpu,
+        it doesn't change the internal model flag refering gpu or cpu.
+        '''
+        data=torch.load(fin,map_location)
+        self.__dict__.update({key:val for key,val in data.items() \
+            if not key=='state_dict'})
+        self.load_state_dict(data['state_dict'])
+
+def load_model(modelfilename,modelclassname,map_location=None):
+    '''
+    Loads a model from file.
+    '''
+    if modelclassname=='LSTM_TED_Rating_Predictor_wordonly':
+        # Create a model with fake data
+        model = LSTM_TED_Rating_Predictor_wordonly(5,5,\
+            np.array([[1,2],[2,3]]).astype(np.float32))
+        # Load actual model data from file
+        model.load(open(modelfilename),map_location)
+        return model
+    else:
+        raise NotImplementedError
+
+class multiLinear(nn.Module,ModelIO):
     '''
     An embedding module to learn "dic_len" number of affine transformations.
     Similar to linear but more than one pair of weight and biases.
     '''
     def __init__(self,dic_len,in_size,out_size):
         super(multiLinear,self).__init__()
+        self.in_size = in_size
+        self.out_size = out_size
         self.weight = Parameter(torch.randn(dic_len,in_size,out_size))
         self.bias = Parameter(torch.randn(dic_len,1,out_size))
     def forward(self,i,x):
@@ -37,7 +93,7 @@ def __def_tensor__(gpunum,listobj):
         with torch.cuda.device(gpunum):
             return Variable(torch.cuda.FloatTensor([listobj]))        
 
-class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
+class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
     '''
     An LSTM based rating predictor. It expects to intake
     from ttdf.TED_Rating_Averaged_Dataset
@@ -47,12 +103,17 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, gpuNum=-1):
         super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()
         self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
         self.lstm = nn.LSTMCell(input_dim, hidden_dim)
         #self.lstm = LSTM_custom(input_dim, hidden_dim)
         self.linear_rat = nn.Linear(hidden_dim, output_dim)
         self.gpuNum = gpuNum
         self.hidden_0 = self.init_hidden() 
-
+        # Set loss function
+        with torch.no_grad():
+            self.loss_fn = nn.NLLLoss()
+        # GPUtize itself
+        ttdf.gputize(self,self.gpuNum)
 
     def init_hidden(self):
         nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
@@ -75,7 +136,7 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module):
             outrating.append(rat_scores)
         return outrating
 
-class LSTM_custom(nn.Module):
+class LSTM_custom(nn.Module,ModelIO):
     '''
     A custom implementation of LSTM in pytorch. Donot use. VERY slow
     '''
@@ -100,7 +161,7 @@ class LSTM_custom(nn.Module):
         h_ = o * F.tanh(c_)
         return h_,c_
 
-class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
+class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
     An LSTM based rating predictor. It expects to intake
     from ttdf.TED_Rating_Averaged_Dataset 
@@ -110,16 +171,20 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
         wvec_vals,gpuNum=-1):
         super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
         self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
         self.wvec=ttdf.variablize(wvec_vals,gpuNum)
         self.input_dim = np.size(wvec_vals,axis=1)
         self.lstm = nn.LSTMCell(self.input_dim, hidden_dim)
-        #self.lstm = LSTM_custom(input_dim, hidden_dim)
         self.linear_rat = nn.Linear(hidden_dim, output_dim)
         self.gpuNum = gpuNum
         self.hidden_0 = self.init_hidden()
         # Out of vocabulary vector
         self.oov = ttdf.variablize(np.zeros((1,self.input_dim)\
             ).astype(np.float32),self.gpuNum)
+        # Set loss function
+        self.loss_fn = nn.BCEWithLogitsLoss()        
+        # GPUtizing itself is necessary for ModelIO
+        ttdf.gputize(self,self.gpuNum)        
 
     def init_hidden(self):
         nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
@@ -168,7 +233,7 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module):
         return outrating
 
 
-class SyntacticSemanticEngine(nn.Module):
+class SyntacticSemanticEngine(nn.Module,ModelIO):
     '''
     Syntactic Semantic Engine is a new model for representing a dependency
     tree along with the distributed representations of the corresponding words.
@@ -222,6 +287,10 @@ class SyntacticSemanticEngine(nn.Module):
         # Set activations
         self.activation = activation
         self.final_activation = final_activation
+        # Set loss function
+        self.loss_fn = nn.KLDivLoss(size_average=False)
+        # GPUtize itself
+        ttdf.gputize(self,self.gpu)
     
     def __process_node__(self,w,p,d,hin):
         '''
@@ -329,7 +398,7 @@ class SyntacticSemanticEngine(nn.Module):
         '''
         return self.__process_a_bag__(bag_of_dtree)
 
-class RevisedTreeEncoder(nn.Module):
+class RevisedTreeEncoder(nn.Module,ModelIO):
     '''
     A revised (as of Feb 26th, 2018) version of the Syntactic Semantic Engine.
     TODO: Test Thoroughly
@@ -408,6 +477,12 @@ class RevisedTreeEncoder(nn.Module):
         # Set activations
         self.activation = activation
         self.final_activation = final_activation
+
+        # Set loss function
+        self.loss_fn = nn.KLDivLoss(size_average=False)        
+
+        # GPUtize itself
+        ttdf.gputize(self,self.gpu)
     
     def __build_wvec__(self,w):
         '''

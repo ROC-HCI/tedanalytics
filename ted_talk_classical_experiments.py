@@ -548,6 +548,7 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10,
         X,label = ttdf.concat_features(X,label,*ttdf.read_lexical_feat(X.keys()))
         print 'Lexical features read'
     print 'Complete'
+    import pdb; pdb.set_trace()  # breakpoint 2eda4e0c //
 
     # Train-Test set preparation
     tridx,tstidx = ttdf.split_train_test(talklist=X.keys())
