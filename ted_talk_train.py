@@ -195,14 +195,22 @@ def train_recurrent_models(
     # Select correct dataset
 
     if dataset_type == 'word-only':
+        ################ DEBUG * REMOVE ###############
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        # train_id = train_id[:10]
+        # test_id = test_id[:2]
+        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+        ###############################################
         train_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=train_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
-            flatten_sentence=flatten_sentence)
+            flatten_sentence=flatten_sentence,gpuNum=GPUnum)
         test_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=test_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
-            flatten_sentence=flatten_sentence)    
+            flatten_sentence=flatten_sentence,gpuNum=GPUnum)    
     else:
         raise NotImplementedError('Currently "word-only" is the only supported dataset_type')
     
@@ -291,9 +299,9 @@ def train_recurrent_models(
             #############################################
             # Option 1: Fastest for now. Data is readily usable.
             minibatch_iter = ttdf.get_minibatch_iter(train_dataset,\
-                minibatch_size,GPUnum)
+                minibatch_size)
             minibatch_iter_test = ttdf.get_minibatch_iter(test_dataset,\
-                minibatch_size,GPUnum)
+                minibatch_size)
             # Option 2: Uses multiple processes, so, supposed to be fast.
             # But not. Creating and destroying multiple processes have large
             # overhead. Data is readily usable.
@@ -401,7 +409,7 @@ def resume_recurrent_training():
 def __compute_loss__(log_probs,minibatch,loss_fn):
     losslist = []
     count=0.    
-    for i,an_item in enumerate(minibatch):
+    for i,an_item in enumerate(minibatch):        
         losslist.append(loss_fn(log_probs[i],an_item['Y']))
         count+=1.
     loss = reduce(torch.add,losslist)/count

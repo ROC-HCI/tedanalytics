@@ -53,28 +53,34 @@ def generate_dep_tag(talk_id,dep_type='recur',tag_type='{LG}'):
         # yield only one kind of dependency
         yield adep,label,(i,j),sent
 
-def get_dep_rating(talk_id,scale_rating=True):
+def get_dep_rating(talk_id,scale_rating=True,process_ratings=True):
     ''' 
     Given a talk_id, it generates the dependency tree and rating.
     '''
     filename = os.path.join(ted_data_path,'TED_meta/'+str(talk_id)+'.pkl')
     data = cp.load(open(filename))
     alldat = []
-    ratedict = data['talk_meta']['ratings']
-    # Processing the ratings
-    if scale_rating:
-        ratedict_processed = {akey:float(ratedict[akey])/float(\
-            ratedict['total_count']) for akey in sorted(ratedict)\
-            if not akey=='total_count'}
-    else:
-        ratedict_processed = {akey:float(ratedict[akey]) for akey \
-            in sorted(ratedict) if not akey=='total_count'}
-    # Another convenient format
-    y = [vals for keys,vals in sorted(ratedict_processed.items())]
+    # Provision to skip the ratings altogether
+    if process_ratings:
+        ratedict = data['talk_meta']['ratings']
+        # Processing the ratings
+        if scale_rating:
+            ratedict_processed = {akey:float(ratedict[akey])/float(\
+                ratedict['total_count']) for akey in sorted(ratedict)\
+                if not akey=='total_count'}
+        else:
+            ratedict_processed = {akey:float(ratedict[akey]) for akey \
+                in sorted(ratedict) if not akey=='total_count'}
+        # Another convenient format
+        y = [vals for keys,vals in sorted(ratedict_processed.items())]
+
     # All the dependency trees
     for adep in data['dep_trees_recur']:
         alldat.append(adep)
-    return alldat,y,ratedict_processed
+    if process_ratings:
+        return alldat,y,ratedict_processed
+    else:
+        return alldat
 
 def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
     read_hidden_test_set=False):
@@ -429,7 +435,7 @@ def variablize(input,gpuNum):
     else:
         return Variable(torch.from_numpy(input))
 
-def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
+def get_minibatch_iter(dataset,minibatch_size,datakeys=['X','Y']):
     '''
     Iterator for a shuffled and variablized minibatch. This method correctly
     handles the dataset.flatten_sentence flag.
@@ -442,8 +448,7 @@ def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
         for i in range(0,len(idx),minibatch_size):
             batch = []
             for j in range(i,min(len(idx),i+minibatch_size)):
-                adata = {akey:variablize(dataset[idx[j]][akey],gpuNum)\
-                    for akey in datakeys}
+                adata = {akey:dataset[idx[j]][akey] for akey in datakeys}
                 batch.append(adata)
             yield batch
     else:
@@ -453,9 +458,9 @@ def get_minibatch_iter(dataset,minibatch_size,gpuNum,datakeys=['X','Y']):
                 adata={}
                 for akey in datakeys:
                     if akey=='X':
-                        adata[akey]=[variablize(asent,gpuNum) for asent in dataset[idx[j]][akey]]
+                        adata[akey]=[asent for asent in dataset[idx[j]][akey]]
                     else:
-                        adata[akey]=variablize(dataset[idx[j]][akey],gpuNum)
+                        adata[akey]=dataset[idx[j]][akey]
                 batch.append(adata)
             yield batch
 
@@ -684,6 +689,9 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
     word-vectors for each word in the transcript. For out of vocabulary
     word, it will put -1 as the index. For compound words (e.g. modern-world),
     it will juxtapose the indices of the constituent words.
+
+    While designing the dataset class, it is important to gputize and
+    variablize all the data.
     
     Note: Input Semantics for LSTM
     The first axis is the sequence itself (T), the second indexes
@@ -693,8 +701,9 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
             secondThresh=50.,scale_rating=True,flatten_sentence=False,
-            access_hidden_test=False):
+            access_hidden_test=False,gpuNum=-1):
 
+        self.gpunum = gpuNum
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
@@ -713,7 +722,7 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         # Other important information for the dataset
         print 'reading word vectors'
         self.flatten_sentence=flatten_sentence
-        self.wvec_map = wvec_index_maker()
+        self.wvec_map = wvec_index_maker(self.gpunum)
         self.dims = self.wvec_map.dims
         print 'Dataset Ready'
 
@@ -736,15 +745,13 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         # tensor.Longtensor because these are indices and will be supplied
         # as index intigers in pytorch later on.
         if self.flatten_sentence:
-            xval = np.array(outvec).astype(np.int64).reshape(-1,1)
+            xval = outvec.reshape(-1,1)
         else:
-            xval=[np.array(asent).astype(np.int64).reshape(-1,1) \
-                for asent in outvec]
+            xval=[asent.reshape(-1,1) for asent in outvec]
         # Process the labels
-        yval = np.reshape([1 if alab == 1 else 0 for alab in \
-            self.Y[talkid]],(-1,1)).astype(np.float32)
+        yval = variablize(np.reshape([1 if alab == 1 else 0 for alab in \
+            self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
-
     
 class wvec_index_maker():
     '''
@@ -754,11 +761,12 @@ class wvec_index_maker():
     this matrix is consistent with the w2v_indices. Initialize it only once because
     it loads the w2v dictionary while initializing.
     '''
-    def __init__(self):
+    def __init__(self,gpuNum):
         # Reading the complete w2v dictionary
         wvec = read_crop_glove()
+        self.gpunum = gpuNum
         self.w2v_indices = {akey:i for i,akey in enumerate(wvec)}
-        self.w2v_vals = np.array(wvec.values()).astype(np.float32)
+        self.w2v_vals = variablize(np.array(wvec.values()).astype(np.float32),gpuNum)
         self.dims = len(wvec['the'])
     
     def __call__(self,talkid,flatten_sentence=True):
@@ -797,7 +805,7 @@ class wvec_index_maker():
                 allidx.extend(self.word2idx(tempwords))
             else:
                 allidx.append(-1)
-        return allidx
+        return variablize(np.array(allidx).astype(np.int64),self.gpunum)
 
 class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
     """
