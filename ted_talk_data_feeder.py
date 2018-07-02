@@ -526,18 +526,31 @@ class TED_Rating_Averaged_Dataset(Dataset):
     The first axis is the sequence itself (T), the second indexes
     instances in the mini-batch (B), and the third indexes elements
     of the input (*).
+    TODO: 
+    1. Utilize wvec_index_maker
+    2. Wordwise prosody
+    3. Sentence-wise Face and Pose
+    4. Preload into the GPU
     """
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
             secondThresh=50.,scale_rating=True,posedim=36,prosodydim=49,\
-            facedim=44,worddim=300,modality=['word','pose','face','audio']):
-
+            facedim=44,worddim=300,modality=['word','pose','face','audio'],\
+            flatten_sentence=False,access_hidden_test=False,gpuNum=-1):
+        self.gpunum = gpuNum
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
-
+        ################ DEBUG * REMOVE ###############
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        #self.data_indices = self.data_indices[:10]
+        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+        ###############################################
+        
         # Other important information for the dataset
         print 'reading word vectors'
         # Reading the complete w2v dictionary
@@ -598,6 +611,8 @@ class TED_Rating_Averaged_Dataset(Dataset):
         sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
         sentdat = sentdat['sentences']
         prosdat,_ = read_prosody_per_sentence(talkid)
+        import pdb; pdb.set_trace()  # breakpoint 73c0521b //
+
 
         outvec=[]
         # Second best candidate for data parallelization. CPU multithreading
@@ -689,10 +704,8 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
     word-vectors for each word in the transcript. For out of vocabulary
     word, it will put -1 as the index. For compound words (e.g. modern-world),
     it will juxtapose the indices of the constituent words.
+    The data is gputized and variablized.
 
-    While designing the dataset class, it is important to gputize and
-    variablize all the data.
-    
     Note: Input Semantics for LSTM
     The first axis is the sequence itself (T), the second indexes
     instances in the mini-batch (B), and the third indexes elements
@@ -752,7 +765,82 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         yval = variablize(np.reshape([1 if alab == 1 else 0 for alab in \
             self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
-    
+
+class TED_Rating_depPOSonly_indices_Dataset(Dataset):
+    """TED rating dataset.
+    Only the dependency type and POS are used; arranged within the tree.
+    The data is gputized and variablized. This dataset doesn't support
+    flatten_sentence = True.
+    It must be processed using a recursive neural network.
+    """
+
+    def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
+            secondThresh=50.,scale_rating=True,flatten_sentence=False,
+            access_hidden_test=False,gpuNum=-1):
+        self.gpunum = gpuNum
+        # get ratings
+        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
+            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
+        # Indices of the data in the dataset
+        self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
+        ################ DEBUG * REMOVE ###############
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        #self.data_indices = self.data_indices[:10]
+        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+        ###############################################
+        print 'reading ratings'
+        self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
+
+        # Other important information for the dataset
+        print 'reading vocabs'
+        self.flatten_sentence=flatten_sentence
+        if flatten_sentence:
+            raise IOError('This dataset does not support flattening')
+        _,self.depidx,_,self.posidx = read_dep_pos_vocab()
+        vardeps = variablize(np.array(\
+            self.depidx.values()).astype(np.int64),self.gpunum)
+        varposes = variablize(np.array(\
+            self.posidx.values()).astype(np.int64),self.gpunum)
+        self.depidx = {dep:a_vardep for dep,a_vardep in \
+            zip(self.depidx.keys(),vardeps)}
+        self.posidx = {pos:a_varpos for pos,a_varpos in \
+            zip(self.posidx.keys(),varposes)}
+        # Just the dependency index and pos index
+        self.dims = 2
+        print 'Dataset Ready'
+
+        
+    def __len__(self):
+        return len(self.data_indices)
+
+    def __convert_atree__(self, atree):
+        '''
+        Represent a dependency tree with variablized indices
+        '''
+        n = len(atree)
+        for i in range(n):
+            if type(atree[i]) in [str, unicode]:
+                w,p,d = atree[i].strip().encode('ascii','ignore').split()
+                atree[i] = (self.depidx[d],self.posidx[p])
+            elif type(atree[i])==list:
+                atree[i] = self.__convert_atree__(atree[i])
+        return atree
+
+
+    def __getitem__(self, idx):
+        '''
+        Given a data index (not videoid), get the corresponding data
+        '''
+        talkid = self.data_indices[idx]
+        deptrees = get_dep_rating(talkid,process_ratings=False)
+        coded_dtrees = map(self.__convert_atree__,deptrees)
+        # Process the labels
+        yval = variablize(np.reshape([1 if alab == 1 else 0 for alab in \
+            self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
+        return {'X':coded_dtrees,'Y':yval,'ylabel':self.ylabel}
+
 class wvec_index_maker():
     '''
     A class to convert the transcript of any talk to a list of word-vector indices.
@@ -762,14 +850,16 @@ class wvec_index_maker():
     it loads the w2v dictionary while initializing.
     '''
     def __init__(self,gpuNum):
+        self.gpunum = gpuNum
         # Reading the complete w2v dictionary
         wvec = read_crop_glove()
-        self.gpunum = gpuNum
         self.w2v_indices = {akey:i for i,akey in enumerate(wvec)}
         self.w2v_vals = variablize(np.array(wvec.values()).astype(np.float32),gpuNum)
+        # Reading the POS and dependency dictionaries
+
         self.dims = len(wvec['the'])
     
-    def __call__(self,talkid,flatten_sentence=True):
+    def __call__(self,talkid,flatten_sentence=False):
         '''
         Read all the sentences from the transcript
         Convert all words to w2v indices using Word2idx function
@@ -816,6 +906,8 @@ class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
     The first axis is the sequence itself (T), the second indexes
     instances in the mini-batch (B), and the third indexes elements
     of the input (*).
+
+    TODO: Utilize wvec_index_maker
     """
     def __getitem__(self, idx):
         '''

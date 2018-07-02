@@ -153,13 +153,13 @@ def train_model(model, feeder,
     model.save(open(model_filename,'wb'))
 
 def train_recurrent_models(
-    dataset_type = 'word-only',
+    dataset_type = 'deppos',
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
     flatten_sentence = False,
     minibatch_size = 30,
-    hidden_dim = 128,
+    hidden_dim = 64,
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adagrad,
@@ -169,7 +169,7 @@ def train_recurrent_models(
     '''
     Trains the LSTM models using sequential datasets.
     
-    **Currently only 'word-only' dataset is allowed.**
+    **Currently only 'word-only' and 'deppos' dataset is allowed.**
     
     Output:
     1) A log file LSTM_log_ ... <random_number>.txt
@@ -193,7 +193,6 @@ def train_recurrent_models(
     # Prepare trining and test split
     train_id,test_id = ttdf.split_train_test(train_test_ratio)
     # Select correct dataset
-
     if dataset_type == 'word-only':
         ################ DEBUG * REMOVE ###############
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -210,9 +209,19 @@ def train_recurrent_models(
         test_dataset = ttdf.TED_Rating_wordonly_indices_Dataset(
             data_indices=test_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
-            flatten_sentence=flatten_sentence,gpuNum=GPUnum)    
+            flatten_sentence=flatten_sentence,gpuNum=GPUnum) 
+    elif dataset_type == 'deppos':
+        train_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices=train_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            gpuNum=GPUnum)
+        test_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices=test_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            gpuNum=GPUnum)
     else:
-        raise NotImplementedError('Currently "word-only" is the only supported dataset_type')
+        raise NotImplementedError(\
+            'Only "word-only" and "deppos" are supported dataset_type')
     
     # Length of the training and test (held out) dataset
     train_datalen = len(train_dataset)
@@ -243,6 +252,10 @@ def train_recurrent_models(
         model = ttm.LSTM_TED_Rating_Predictor_wordonly(
             hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
             wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum)
+    elif dataset_type == 'deppos':
+        model = ttm.TreeLSTM(input_dim=hidden_dim,hidden_dim=hidden_dim,
+            output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
+            posidx=train_dataset.posidx,gpuNum=GPUnum)
     else:
         raise IOError('Model type not recognized')
     print 'done'

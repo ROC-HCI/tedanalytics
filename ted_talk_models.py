@@ -161,6 +161,93 @@ class LSTM_custom(nn.Module,ModelIO):
         h_ = o * F.tanh(c_)
         return h_,c_
 
+class TreeLSTM(nn.Module,ModelIO):
+    '''
+    A custom implementation of childsum TreeLSTM in pytorch.
+    '''
+    def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,gpuNum=-1):
+        super(TreeLSTM,self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.depidx = depidx
+        self.posidx = posidx
+        self.gpuNum = gpuNum
+        self.h0, self.c0 = self.init_hidden()
+        # Learnable parameters
+        self.depembedding = nn.Embedding(len(depidx),np.ceil(input_dim/2.))
+        self.posembedding = nn.Embedding(len(posidx),np.floor(input_dim/2.))
+        self.Wi = nn.Linear(input_dim,hidden_dim)
+        self.Ui = nn.Linear(hidden_dim,hidden_dim)
+        self.Wf = nn.Linear(input_dim,hidden_dim)
+        self.Uf = nn.Linear(hidden_dim,hidden_dim)
+        self.Wu = nn.Linear(input_dim,hidden_dim)
+        self.Uu = nn.Linear(hidden_dim,hidden_dim)
+        self.Wo = nn.Linear(input_dim,hidden_dim)
+        self.Uo = nn.Linear(hidden_dim,hidden_dim)
+        self.linear_rat = nn.Linear(hidden_dim,output_dim)
+        # Set loss function
+        self.loss_fn = nn.BCEWithLogitsLoss()        
+        # GPUtizing itself is necessary for ModelIO
+        ttdf.gputize(self,self.gpuNum)        
+
+    def init_hidden(self):
+        nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
+        return (ttdf.variablize(nullvec.copy(),self.gpuNum),
+                ttdf.variablize(nullvec.copy(),self.gpuNum))
+
+    def encodetree(self,atree):
+        # Loop over all the children
+        for ind,anode in enumerate(atree):
+            if type(anode) is tuple:
+                depvec = self.depembedding(anode[0])
+                posvec = self.posembedding(anode[1])
+                x = torch.cat((depvec,posvec)).view(1,-1)
+                # Look ahead if the next node is a subtree. If yes
+                # process it first
+                if ind < len(atree)-1 and type(atree[ind+1])==list:
+                    h_k,c_k = self.encodetree(atree[ind+1])
+                else:
+                    # For leaf node, child hidden value is the same
+                    # as the initial hidden value
+                    h_k,c_k = self.h0,self.c0                
+                # Child-wise forget gate
+                f_k = F.sigmoid(self.Wf(x)+self.Uf(h_k))
+                if ind == 0:
+                    h = h_k
+                    summed_c = f_k*c_k
+                else:
+                    h = h + h_k
+                    summed_c = summed_c + f_k*c_k
+        # Now process the current node
+        # input gate
+        i = F.sigmoid(self.Wi(x) + self.Ui(h))
+        # output gate
+        o = F.sigmoid(self.Wo(x)+self.Uo(h))
+        # data
+        u = F.tanh(self.Wu(x) + self.Uu(h))
+        c_k = i*u + summed_c
+        h_k = o * F.tanh(c_k)
+        return h_k,c_k
+
+    def forward(self,minibatch):
+        outrating = []
+        for an_item in minibatch:
+            # Feed each tree through TreeLSTM
+            outsum = self.h0
+            count = 0.
+            for atree in an_item['X']:
+                h,c = self.encodetree(atree)
+                # Accumulate vectors per sentence
+                outsum = outsum + h
+                count = count + 1.
+            # Bag-of-Sentences Model
+            h = outsum/count
+            # Pass the output through feed-forward
+            rat_scores = self.linear_rat(h).view(-1,1)
+            outrating.append(rat_scores)
+        return outrating
+
 class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
     An LSTM based rating predictor. It expects to intake
