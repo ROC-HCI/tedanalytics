@@ -85,8 +85,9 @@ def evaluate_recurrent_models(logfilename,test_id=list_of_talks.test_set):
     output2 = logfilename.replace('LSTM_log','LSTM_results_finaltest').replace('.txt','.pkl')
     # Load log data and model
     logdata = ttr.read_lstm_log(logfilename)
-    # Model will be loaded in the cpu
-    model = ttm.load_model(modelfilename,logdata['modelclassname'],'cpu')    
+    # Model will be loaded in the cpu/GPU according to the log
+    model = ttm.load_model(modelfilename,logdata['modelclassname'])
+    ttdf.gputize(model,model.gpuNum)
     model.eval()
 
     #--------------- Evaluate using the held-out dataset ------------------
@@ -114,12 +115,34 @@ def get_results(logdata,model,test_indices):
             firstThresh = logdata['firstThresh'],
             secondThresh = logdata['secondThresh'],
             scale_rating = bool(logdata['scale_rating']),
-            flatten_sentence=False,access_hidden_test=list_of_talks.test_set==test_indices)    
+            flatten_sentence=False,
+            access_hidden_test=list_of_talks.test_set==test_indices)    
+    elif logdata['dataset_type'] == 'deppos':
+        test_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices = test_indices,
+            firstThresh = logdata['firstThresh'],
+            secondThresh = logdata['secondThresh'],
+            scale_rating = bool(logdata['scale_rating']),
+            flatten_sentence=False,
+            access_hidden_test=list_of_talks.test_set==test_indices,
+            gpuNum=model.gpuNum)
+    elif logdata['dataset_type'] == 'depposword':
+        wvec = ttdf.wvec_index_maker(model.gpuNum)
+        test_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices = test_indices,
+            firstThresh = logdata['firstThresh'],
+            secondThresh = logdata['secondThresh'],
+            scale_rating = bool(logdata['scale_rating']),
+            flatten_sentence=False,
+            access_hidden_test=list_of_talks.test_set==test_indices,
+            wvec_index_maker=wvec,
+            gpuNum=model.gpuNum)        
     else:
-        raise NotImplementedError('Currently "word-only" is the only supported dataset_type')    
+        raise NotImplementedError(
+        'Only "word-only", "deppos", and "depposword" are supported')
     
-    # Load minibatch in cpu
-    minibatch_iter = ttdf.get_minibatch_iter(test_dataset,20,-1)
+    # Load minibatch
+    minibatch_iter = ttdf.get_minibatch_iter(test_dataset,20)
     
     # get model predictions
     y_score=[]
@@ -132,12 +155,22 @@ def get_results(logdata,model,test_indices):
             model_output = model(minibatch)
             if logdata['lossclassname']=='BCEWithLogitsLoss':
                 # BCEWithLogitsLoss applies the sigmoid within the loss function
-                temp = map(lambda x:F.sigmoid(x.squeeze()).numpy().tolist(),\
-                    model_output)
+                try:
+                    temp = map(lambda x:F.sigmoid(x.squeeze()).numpy().tolist(),\
+                        model_output)
+                except TypeError:
+                    temp = map(lambda x:F.sigmoid(x.squeeze()).cpu().numpy().tolist(),\
+                        model_output)
             else:
-                temp = map(lambda x:x.squeeze().numpy().tolist(),model_output)
+                try:
+                    temp = map(lambda x:x.squeeze().numpy().tolist(),model_output)
+                except TypeError:
+                    temp = map(lambda x:x.squeeze().cpu().numpy().tolist(),model_output)
         pred = map(lambda x:[float(an_x>0.5) for an_x in x],temp)
-        a_gt = [an_item['Y'].numpy().squeeze().tolist() for an_item in minibatch]
+        try:
+            a_gt = [an_item['Y'].numpy().squeeze().tolist() for an_item in minibatch]
+        except TypeError:
+            a_gt = [an_item['Y'].cpu().numpy().squeeze().tolist() for an_item in minibatch]
         y_score.extend(temp)
         y_predict.extend(pred)
         y_gt.extend(a_gt)

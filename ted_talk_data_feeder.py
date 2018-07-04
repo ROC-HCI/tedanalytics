@@ -776,7 +776,7 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
 
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
             secondThresh=50.,scale_rating=True,flatten_sentence=False,
-            access_hidden_test=False,gpuNum=-1):
+            access_hidden_test=False,wvec_index_maker=None,gpuNum=-1):
         self.gpunum = gpuNum
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
@@ -807,8 +807,16 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
             zip(self.depidx.keys(),vardeps)}
         self.posidx = {pos:a_varpos for pos,a_varpos in \
             zip(self.posidx.keys(),varposes)}
+        if wvec_index_maker:
+            self.wvec_map = wvec_index_maker
+            self.oov = variablize(np.zeros(300).astype(np.float32),self.gpunum)
+        else:
+            self.wvec_map = None
         # Just the dependency index and pos index
-        self.dims = 2
+        if not wvec_index_maker:
+            self.dims = 2
+        else:
+            self.dims = 3
         print 'Dataset Ready'
 
         
@@ -823,7 +831,15 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
         for i in range(n):
             if type(atree[i]) in [str, unicode]:
                 w,p,d = atree[i].strip().encode('ascii','ignore').split()
-                atree[i] = (self.depidx[d],self.posidx[p])
+                if not self.wvec_map:
+                    atree[i] = (self.depidx[d],self.posidx[p])
+                else:
+                    if w in self.wvec_map.w2v_indices:
+                        idx = self.wvec_map.w2v_indices[w]
+                        wvec = self.wvec_map.w2v_vals[idx]
+                    else:
+                        wvec = self.oov
+                    atree[i] = (self.depidx[d],self.posidx[p],wvec)
             elif type(atree[i])==list:
                 atree[i] = self.__convert_atree__(atree[i])
         return atree
@@ -856,7 +872,6 @@ class wvec_index_maker():
         self.w2v_indices = {akey:i for i,akey in enumerate(wvec)}
         self.w2v_vals = variablize(np.array(wvec.values()).astype(np.float32),gpuNum)
         # Reading the POS and dependency dictionaries
-
         self.dims = len(wvec['the'])
     
     def __call__(self,talkid,flatten_sentence=False):

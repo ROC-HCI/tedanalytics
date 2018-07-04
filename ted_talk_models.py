@@ -63,6 +63,11 @@ def load_model(modelfilename,modelclassname,map_location=None):
         # Load actual model data from file
         model.load(open(modelfilename),map_location)
         return model
+    elif modelclassname=='TreeLSTM':
+        model = TreeLSTM(2,2,2,{},{},includewords=False)
+        # Load actual model data from file
+        model.load(open(modelfilename),map_location)
+        return model
     else:
         raise NotImplementedError
 
@@ -165,18 +170,22 @@ class TreeLSTM(nn.Module,ModelIO):
     '''
     A custom implementation of childsum TreeLSTM in pytorch.
     '''
-    def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,gpuNum=-1):
+    def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
+        includewords=False,gpuNum=-1):
         super(TreeLSTM,self).__init__()
-        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.depidx = depidx
         self.posidx = posidx
+        self.includewords = includewords
         self.gpuNum = gpuNum
         self.h0, self.c0 = self.init_hidden()
         # Learnable parameters
         self.depembedding = nn.Embedding(len(depidx),np.ceil(input_dim/2.))
         self.posembedding = nn.Embedding(len(posidx),np.floor(input_dim/2.))
+        if includewords:
+            input_dim = input_dim + 300
+        self.input_dim = input_dim
         self.Wi = nn.Linear(input_dim,hidden_dim)
         self.Ui = nn.Linear(hidden_dim,hidden_dim)
         self.Wf = nn.Linear(input_dim,hidden_dim)
@@ -201,8 +210,12 @@ class TreeLSTM(nn.Module,ModelIO):
         for ind,anode in enumerate(atree):
             if type(anode) is tuple:
                 depvec = self.depembedding(anode[0])
-                posvec = self.posembedding(anode[1])
-                x = torch.cat((depvec,posvec)).view(1,-1)
+                posvec = self.posembedding(anode[1])                
+                if len(anode)==2:
+                    x = torch.cat((depvec,posvec)).view(1,-1)
+                else:
+                    x = torch.cat((depvec,posvec,anode[2])).view(1,-1)
+
                 # Look ahead if the next node is a subtree. If yes
                 # process it first
                 if ind < len(atree)-1 and type(atree[ind+1])==list:

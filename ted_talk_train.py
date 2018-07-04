@@ -153,23 +153,23 @@ def train_model(model, feeder,
     model.save(open(model_filename,'wb'))
 
 def train_recurrent_models(
-    dataset_type = 'deppos',
+    dataset_type = 'depposword',
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
     flatten_sentence = False,
-    minibatch_size = 30,
-    hidden_dim = 64,
+    minibatch_size = 10,
+    hidden_dim = 128,
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adagrad,
     learning_rate = 0.01,
     max_iter_over_dataset = 80,
-    GPUnum = 0):
+    GPUnum = -1):
     '''
     Trains the LSTM models using sequential datasets.
     
-    **Currently only 'word-only' and 'deppos' dataset is allowed.**
+    **Currently only 'word-only', 'deppos' and 'depposword' dataset is allowed.**
     
     Output:
     1) A log file LSTM_log_ ... <random_number>.txt
@@ -219,9 +219,19 @@ def train_recurrent_models(
             data_indices=test_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
             gpuNum=GPUnum)
+    elif dataset_type == 'depposword':
+        wvec=ttdf.wvec_index_maker(gpuNum=GPUnum)
+        train_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices=train_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            wvec_index_maker=wvec,gpuNum=GPUnum)
+        test_dataset = ttdf.TED_Rating_depPOSonly_indices_Dataset(
+            data_indices=test_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            wvec_index_maker=wvec,gpuNum=GPUnum)
     else:
         raise NotImplementedError(\
-            'Only "word-only" and "deppos" are supported dataset_type')
+            'Only "word-only", "deppos", and "depposword" are supported dataset_type')
     
     # Length of the training and test (held out) dataset
     train_datalen = len(train_dataset)
@@ -256,6 +266,10 @@ def train_recurrent_models(
         model = ttm.TreeLSTM(input_dim=hidden_dim,hidden_dim=hidden_dim,
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
             posidx=train_dataset.posidx,gpuNum=GPUnum)
+    elif dataset_type == 'depposword':
+        model = ttm.TreeLSTM(input_dim=32,hidden_dim=hidden_dim,
+            output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
+            posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum)
     else:
         raise IOError('Model type not recognized')
     print 'done'
