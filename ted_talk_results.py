@@ -7,6 +7,7 @@ import cPickle as cp
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from list_of_talks import rating_labels
 
 import torch
 
@@ -90,11 +91,7 @@ def read_lstm_log(afile,averageonly=True):
         for aline in fin:
             aline = aline.strip()
             if '=' in aline and not 'count' in aline:
-                try:
-                    k,v = aline.split('=')
-                except:
-                    import pdb; pdb.set_trace()  # breakpoint 7c5c07cd //
-                    
+                k,v = aline.split('=')                    
                 logdata[k]=__tonum__(v)
             elif averageonly and aline.startswith('train'):
                 traintest = 'train'
@@ -124,6 +121,65 @@ def read_lstm_log(afile,averageonly=True):
                     linedat['iter_time'],linedat['Loss']])
     return logdata
 
+def summarize_lstm_results_pkl(prefix='LSTM_results',\
+    outfile='deep_learning_results.csv',ignoredfields = \
+    {'train','test','train_indices','test_indices','modality','order'}):
+    '''
+    Summarize all the LSTM evaluation results (stored in pkl file) with 
+    a single csv file.
+    '''
+    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',\
+        prefix+'*.pkl'))
+    m = len(filenames)
+    outfilename_table = os.path.join(ted_data_path,'TED_stats/',outfile)
+
+    alldata = {}
+    average_accuracy={}
+    average_auc = {}
+    ratings = set(rating_labels)
+    new_ratings = set(['average_accuracy','average_auc'])
+    for i,afile in enumerate(filenames):
+        print afile
+        data = cp.load(open(afile))
+        all_accuracy=[]
+        all_auc=[]
+        for akey in data:
+            if akey.lower() in ignoredfields:
+                continue
+            if akey in ratings:
+                newkeys = [akey+'_'+anorder for anorder in data['order']]
+                newvals = data[akey]
+                all_accuracy.append(data[akey][-2])
+                all_auc.append(data[akey][-1])
+                for k,v in zip(newkeys,newvals):
+                    new_ratings.add(k)
+                    alldata.setdefault(k,{}).update({i:v})
+            else:
+                alldata.setdefault(akey,{}).update({i:data[akey]})
+        alldata.setdefault('average_accuracy',{}).update({i:np.mean(all_accuracy)})
+        alldata.setdefault('average_auc',{}).update({i:np.mean(all_auc)})
+
+    log_info = [h for h in alldata.keys() if not h in new_ratings]
+    headers = log_info+sorted(list(new_ratings))
+    with open(outfilename_table,'wb') as fout:
+        writer = csv.DictWriter(fout,headers)
+        writer.writeheader()
+        i=0
+        while i < m:
+            arow = {}
+            for akey in alldata:
+                try:
+                    arow[akey] = alldata[akey][i]
+                except KeyError:
+                    print akey,'not found in:', afile
+            writer.writerow(arow)
+            i+=1
+    print 'Result comparison table saved in:'
+    print outfilename_table
+
+
+
+
 def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     outfile='summary_plot_LSTM_log.pdf',ignoredfields = \
     ['train','test','train_indices','test_indices',\
@@ -132,7 +188,8 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     '''
     Summarize all the LSTM training logs with a single figure
     '''
-    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',prefix+'*'))    
+    filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',\
+        prefix+'*'))    
     fpath,fname = os.path.split(outfile)
     fname,fext = fname.split('.')
     outfilename_time = os.path.join(ted_data_path,'TED_stats/',\
@@ -140,7 +197,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     outfilename_iter = os.path.join(ted_data_path,'TED_stats/',\
         os.path.join(fpath,fname+'_iter_no'+'.'+fext))
     alldata={}
-    for i,afile in enumerate(filenames):        
+    for i,afile in enumerate(filenames):
         filedata = read_lstm_log(afile,averageonly)
         for akey in filedata:
             alldata.setdefault(akey,{}).update({i:filedata[akey]})

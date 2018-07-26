@@ -719,7 +719,7 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         self.gpunum = gpuNum
         # get ratings
         self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
-            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
+            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)[:3]
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
         ################ DEBUG * REMOVE ###############

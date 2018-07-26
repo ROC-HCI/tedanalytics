@@ -153,19 +153,20 @@ def train_model(model, feeder,
     model.save(open(model_filename,'wb'))
 
 def train_recurrent_models(
-    dataset_type = 'depposword',
-    firstThresh = 50.,
-    secondThresh = 50.,
+    dataset_type = 'word-only',
+    firstThresh = 30.,
+    secondThresh = 70.,
     scale_rating = True,
     flatten_sentence = False,
     minibatch_size = 10,
     hidden_dim = 128,
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
-    optimizer_fn = optim.Adagrad,
-    learning_rate = 0.01,
-    max_iter_over_dataset = 80,
-    GPUnum = -1):
+    optimizer_fn = optim.Adam,
+    learning_rate = 0.0066,
+    weight_decay = 0.0033,
+    max_iter_over_dataset = 75,
+    GPUnum = 0):
     '''
     Trains the LSTM models using sequential datasets.
     
@@ -267,7 +268,7 @@ def train_recurrent_models(
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
             posidx=train_dataset.posidx,gpuNum=GPUnum)
     elif dataset_type == 'depposword':
-        model = ttm.TreeLSTM(input_dim=32,hidden_dim=hidden_dim,
+        model = ttm.TreeLSTM(input_dim=16,hidden_dim=hidden_dim,
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
             posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum)
     else:
@@ -278,7 +279,7 @@ def train_recurrent_models(
     loss_fn = model.loss_fn
 
     # Initialize the optimizer
-    optimizer = optimizer_fn(model.parameters(),lr = learning_rate)
+    optimizer = optimizer_fn(model.parameters(),lr = learning_rate,weight_decay=weight_decay)
 
     # Preparing file to save the parameters and status
     with open(outlogfile,'wb') as fparam:    
@@ -295,6 +296,7 @@ def train_recurrent_models(
         fparam.write('hidden_dim={}'.format(hidden_dim)+'\n')
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
         fparam.write('learning_rate={}'.format(learning_rate)+'\n')
+        fparam.write('weight_decay={}'.format(weight_decay)+'\n')
         fparam.write('model_outfile={}'.format(model_outfile)+'\n')
         fparam.write('modelclassname={}'.format(model.__class__.__name__)+'\n')
         fparam.write('modelclass={}'.format(str(model.__class__))+'\n')
