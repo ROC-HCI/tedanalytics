@@ -33,7 +33,7 @@ def exp0b_debug_test_SSE_small_data():
     '''
     start_time = time.time()
     # Binarize the ratings for the whole dataset
-    y_bin, thresh, label_names = ttdf.binarized_ratings()
+    y_bin, label_names = ttdf.binarized_ratings()
     # Read the output log
     test_idx,_,model = ttr.read_output_log(result_dir = 'SSE_result/')
     # Prepare loss function
@@ -92,7 +92,7 @@ def exp2_evaluate(outdir,result_filename = 'dev_result',
     '''
     start_time = time.time()
     # Prepare to evaluate
-    y_bin, thresh, label_names = ttdf.binarized_ratings()
+    y_bin, label_names = ttdf.binarized_ratings()
     test_idx,_,model = ttr.read_output_log(result_dir = outdir)
     loss_fn = loss_fn_name(size_average=False)
     outfile = os.path.join(os.path.join(ted_data_path,outdir),result_filename)
@@ -116,6 +116,134 @@ def exp3_run_in_Bluehive():
     print 'Training Done'
     exp2_evaluate(outdir='run_{}/'.format(taskID))
     print 'Evaluation Done'
+
+# -------------------------------------------------------------
+
+def exp4_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 50.,
+        secondThresh = 50.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.0033,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
+
+def exp4_1_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 50.,
+        secondThresh = 50.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.0066,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
+
+def exp4_2_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 50.,
+        secondThresh = 50.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.01,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
+
+def exp4_3_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 50.,
+        secondThresh = 50.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.001,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
+
+def exp5_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 30.,
+        secondThresh = 70.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.0033,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
+
+def exp6_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 10.,
+        secondThresh = 90.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 10,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.0066,
+        weight_decay = 0.0033,
+        max_iter_over_dataset = 75,
+        GPUnum = 0):
 
 if __name__=='__main__':
     # Control from here which experiment is going to run

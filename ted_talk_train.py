@@ -154,8 +154,8 @@ def train_model(model, feeder,
 
 def train_recurrent_models(
     dataset_type = 'word-only',
-    firstThresh = 30.,
-    secondThresh = 70.,
+    firstThresh = 50.,
+    secondThresh = 50.,
     scale_rating = True,
     flatten_sentence = False,
     minibatch_size = 10,

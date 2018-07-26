@@ -120,12 +120,7 @@ def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
         y_gt[y_gt[:,i]>thresh2[i],i] = 1
 
     # Convert to dictionary for convenience
-    if firstThresh == secondThresh:
-        return {key:val.tolist() for key,val in \
-            zip(valid_talks,y_gt)},thresh1,labels
-    else:
-        return {key:val.tolist() for key,val in \
-            zip(valid_talks,y_gt)},thresh1,labels,thresh2
+    return {key:val.tolist() for key,val in zip(valid_talks,y_gt)},labels
 
 def read_openpose_feat(csv_name =
     'TED_feature_openpose/summary_presenter_openpose_features_0.65.csv'):
@@ -539,7 +534,7 @@ class TED_Rating_Averaged_Dataset(Dataset):
             flatten_sentence=False,access_hidden_test=False,gpuNum=-1):
         self.gpunum = gpuNum
         # get ratings
-        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
+        self.Y,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
@@ -718,8 +713,8 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
 
         self.gpunum = gpuNum
         # get ratings
-        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
-            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)[:3]
+        self.Y,self.ylabel = binarized_ratings(firstThresh,\
+            secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
         ################ DEBUG * REMOVE ###############
@@ -779,7 +774,7 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
             access_hidden_test=False,wvec_index_maker=None,gpuNum=-1):
         self.gpunum = gpuNum
         # get ratings
-        self.Y,_,self.ylabel = binarized_ratings(firstThresh,\
+        self.Y,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)
         # Indices of the data in the dataset
         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
