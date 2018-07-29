@@ -424,8 +424,8 @@ def train_recurrent_models(
 
             #  If the test loss decreases than the minimum test loss, 
             # save the model weights.
-            if lossval_test<min_test_loss:
-                min_test_loss = lossval_test
+            if meanloss<min_test_loss:
+                min_test_loss = meanloss
                 model.save(open(model_filename,'wb'))
 
 def resume_recurrent_training():
