@@ -105,7 +105,8 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
     It is for use of multiple modalities.
     '''
 
-    def __init__(self, input_dim, hidden_dim, output_dim, gpuNum=-1):
+    def __init__(self, input_dim, hidden_dim, output_dim, 
+        gpuNum=-1, dropout = 0.2):
         super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -171,7 +172,7 @@ class TreeLSTM(nn.Module,ModelIO):
     A custom implementation of childsum TreeLSTM in pytorch.
     '''
     def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
-        includewords=False,gpuNum=-1):
+        includewords=False,gpuNum=-1,dropout = 0.2):
         super(TreeLSTM,self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -268,7 +269,7 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
 
     def __init__(self, hidden_dim, output_dim, 
-        wvec_vals,gpuNum=-1):
+        wvec_vals,gpuNum=-1,dropout=0.2):
         super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim

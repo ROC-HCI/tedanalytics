@@ -138,7 +138,7 @@ def exp4_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.0033,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 def exp4_1_run_in_Bluehive():
     '''
@@ -159,7 +159,7 @@ def exp4_1_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.0066,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 def exp4_2_run_in_Bluehive():
     '''
@@ -180,7 +180,7 @@ def exp4_2_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.01,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 def exp4_3_run_in_Bluehive():
     '''
@@ -201,7 +201,7 @@ def exp4_3_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.001,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 def exp5_run_in_Bluehive():
     '''
@@ -222,7 +222,7 @@ def exp5_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.0033,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 def exp6_run_in_Bluehive():
     '''
@@ -243,8 +243,8 @@ def exp6_run_in_Bluehive():
         learning_rate = 0.0066,
         weight_decay = 0.0033,
         max_iter_over_dataset = 75,
-        GPUnum = 0):
+        GPUnum = 0)
 
 if __name__=='__main__':
     # Control from here which experiment is going to run
-    exp3_run_in_Bluehive()
+    exp6_run_in_Bluehive()

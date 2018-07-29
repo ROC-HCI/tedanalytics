@@ -165,6 +165,7 @@ def train_recurrent_models(
     optimizer_fn = optim.Adam,
     learning_rate = 0.0066,
     weight_decay = 0.0033,
+    dropout = 0.2,
     max_iter_over_dataset = 75,
     GPUnum = 0):
     '''
@@ -297,6 +298,7 @@ def train_recurrent_models(
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
         fparam.write('learning_rate={}'.format(learning_rate)+'\n')
         fparam.write('weight_decay={}'.format(weight_decay)+'\n')
+        fparam.write('dropout={}'.format(dropout)+'\n')
         fparam.write('model_outfile={}'.format(model_outfile)+'\n')
         fparam.write('modelclassname={}'.format(model.__class__.__name__)+'\n')
         fparam.write('modelclass={}'.format(str(model.__class__))+'\n')
