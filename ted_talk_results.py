@@ -121,7 +121,7 @@ def read_lstm_log(afile,averageonly=True):
                     linedat['iter_time'],linedat['Loss']])
     return logdata
 
-def summarize_lstm_results_pkl(prefix='LSTM_results',\
+def tabulate_lstm_results_pkl(prefix='LSTM_results',\
     outfile='deep_learning_results.csv',ignoredfields = \
     {'train','test','train_indices','test_indices','modality','order'}):
     '''
@@ -176,7 +176,6 @@ def summarize_lstm_results_pkl(prefix='LSTM_results',\
             i+=1
     print 'Result comparison table saved in:'
     print outfilename_table
-
 
 
 
