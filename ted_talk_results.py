@@ -224,7 +224,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         legendtxts.append(alegend)
 
     # Draw iter time vs loss plot
-    fig=plt.figure(0,figsize=(8.8, 4.8))
+    fig=plt.figure(0,figsize=(15, 8))
     plt.clf()
     for i,alegend in zip(range(len(filenames)),legendtxts):
         trainloss = np.array(alldata['train'][i])        
@@ -242,13 +242,13 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         plt.ylabel('Average loss (in an iteration over dataset)')
     else:
         plt.ylabel('Loss per minibatch')
-    plt.legend()
+    plt.legend(loc='upper right', bbox_to_anchor=(1, 1))
     plt.tight_layout()
     plt.savefig(outfilename_time)
     plt.close()
 
     # draw iter vs loss plot
-    fig=plt.figure(0,figsize=(8.8, 4.8))
+    fig=plt.figure(0,figsize=(15, 8))
     plt.clf()
     for i,alegend in zip(range(len(filenames)),legendtxts):
         # draw plots
@@ -266,7 +266,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         plt.ylabel('Average loss (in an iteration over dataset)')
     else:
         plt.ylabel('Loss per minibatch')
-    plt.legend()
+    plt.legend(loc='upper right', bbox_to_anchor=(1, 1))
     plt.tight_layout()
     plt.savefig(outfilename_iter)
     plt.close()    
