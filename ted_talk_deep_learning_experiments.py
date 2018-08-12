@@ -135,9 +135,9 @@ def exp4_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
-        weight_decay = 0.0033,
-        max_iter_over_dataset = 75,
+        learning_rate = 0.0033,
+        weight_decay = 0.00066,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 def exp4_1_run_in_Bluehive():
@@ -156,9 +156,9 @@ def exp4_1_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
-        weight_decay = 0.0066,
-        max_iter_over_dataset = 75,
+        learning_rate = 0.00066,
+        weight_decay = 0.00066,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 def exp4_2_run_in_Bluehive():
@@ -177,9 +177,9 @@ def exp4_2_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
-        weight_decay = 0.01,
-        max_iter_over_dataset = 75,
+        learning_rate = 0.0001,
+        weight_decay = 0.00066,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 def exp4_3_run_in_Bluehive():
@@ -198,9 +198,9 @@ def exp4_3_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
-        weight_decay = 0.001,
-        max_iter_over_dataset = 75,
+        learning_rate = 0.001,
+        weight_decay = 0.00066,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 def exp5_run_in_Bluehive():
@@ -219,9 +219,9 @@ def exp5_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
+        learning_rate = 0.0001,
         weight_decay = 0.0033,
-        max_iter_over_dataset = 75,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 def exp6_run_in_Bluehive():
@@ -240,9 +240,9 @@ def exp6_run_in_Bluehive():
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0066,
+        learning_rate = 0.0001,
         weight_decay = 0.0033,
-        max_iter_over_dataset = 75,
+        max_iter_over_dataset = 48,
         GPUnum = 0)
 
 if __name__=='__main__':

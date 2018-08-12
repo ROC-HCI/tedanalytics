@@ -165,7 +165,7 @@ def train_recurrent_models(
     optimizer_fn = optim.Adam,
     learning_rate = 0.0066,
     weight_decay = 0.0033,
-    dropout = 0.2,
+    dropconnect = 0.2,
     max_iter_over_dataset = 75,
     GPUnum = 0):
     '''
@@ -263,15 +263,17 @@ def train_recurrent_models(
     if dataset_type == 'word-only':    
         model = ttm.LSTM_TED_Rating_Predictor_wordonly(
             hidden_dim=hidden_dim,output_dim=len(train_dataset.ylabel),
-            wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum)
+            wvec_vals=train_dataset.wvec_map.w2v_vals,gpuNum=GPUnum,
+            dropout=dropconnect)
     elif dataset_type == 'deppos':
         model = ttm.TreeLSTM(input_dim=hidden_dim,hidden_dim=hidden_dim,
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
-            posidx=train_dataset.posidx,gpuNum=GPUnum)
+            posidx=train_dataset.posidx,gpuNum=GPUnum,dropout=dropconnect)
     elif dataset_type == 'depposword':
         model = ttm.TreeLSTM(input_dim=16,hidden_dim=hidden_dim,
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
-            posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum)
+            posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum,
+            dropout=dropconnect)
     else:
         raise IOError('Model type not recognized')
     print 'done'
@@ -298,7 +300,7 @@ def train_recurrent_models(
         fparam.write('train_test_ratio={}'.format(train_test_ratio)+'\n')
         fparam.write('learning_rate={}'.format(learning_rate)+'\n')
         fparam.write('weight_decay={}'.format(weight_decay)+'\n')
-        fparam.write('dropout={}'.format(dropout)+'\n')
+        fparam.write('dropconnect={}'.format(dropconnect)+'\n')
         fparam.write('model_outfile={}'.format(model_outfile)+'\n')
         fparam.write('modelclassname={}'.format(model.__class__.__name__)+'\n')
         fparam.write('modelclass={}'.format(str(model.__class__))+'\n')

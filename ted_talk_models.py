@@ -110,6 +110,8 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
         super(LSTM_TED_Rating_Predictor_Averaged, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.dropout = dropout
+        self.dropconnect = nn.Dropout(self.dropout)
         self.lstm = nn.LSTMCell(input_dim, hidden_dim)
         #self.lstm = LSTM_custom(input_dim, hidden_dim)
         self.linear_rat = nn.Linear(hidden_dim, output_dim)
@@ -134,6 +136,11 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
                 if i==0:
                     # set the first hidden
                     hx, cx = self.lstm(an_input,*self.hidden_0)
+                    lstm_params = self.lstm.state_dict()
+                    for k,v in lstm_params.items():
+                        if k.endswith('hh'):
+                            lstm_params[k] = self.dropconnect(v)
+                    self.lstm.load_state_dict(lstm_params)
                 else:
                     hx, cx = self.lstm(an_input, hx,cx)
             # Feed through Linear
@@ -172,7 +179,7 @@ class TreeLSTM(nn.Module,ModelIO):
     A custom implementation of childsum TreeLSTM in pytorch.
     '''
     def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
-        includewords=False,gpuNum=-1,dropout = 0.2):
+        includewords=False,gpuNum=-1,dropout = 0.0):
         super(TreeLSTM,self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -188,14 +195,16 @@ class TreeLSTM(nn.Module,ModelIO):
             input_dim = input_dim + 300
         self.input_dim = input_dim
         self.Wi = nn.Linear(input_dim,hidden_dim)
-        self.Ui = nn.Linear(hidden_dim,hidden_dim)
         self.Wf = nn.Linear(input_dim,hidden_dim)
-        self.Uf = nn.Linear(hidden_dim,hidden_dim)
         self.Wu = nn.Linear(input_dim,hidden_dim)
+        self.Wo = nn.Linear(input_dim,hidden_dim)        
+        self.Ui = nn.Linear(hidden_dim,hidden_dim)
+        self.Uf = nn.Linear(hidden_dim,hidden_dim)
         self.Uu = nn.Linear(hidden_dim,hidden_dim)
-        self.Wo = nn.Linear(input_dim,hidden_dim)
         self.Uo = nn.Linear(hidden_dim,hidden_dim)
         self.linear_rat = nn.Linear(hidden_dim,output_dim)
+        self.dropout = dropout
+        self.dropconnect = nn.Dropout(self.dropout)        
         # Set loss function
         self.loss_fn = nn.BCEWithLogitsLoss()        
         # GPUtizing itself is necessary for ModelIO
@@ -228,8 +237,14 @@ class TreeLSTM(nn.Module,ModelIO):
                 # Child-wise forget gate
                 f_k = F.sigmoid(self.Wf(x)+self.Uf(h_k))
                 if ind == 0:
+                    # first iteration
                     h = h_k
                     summed_c = f_k*c_k
+                    # Apply dropconnect
+                    self.Ui.load_state_dict({k:self.dropconnect(v) for k,v in self.Ui.state_dict().items()})
+                    self.Uf.load_state_dict({k:self.dropconnect(v) for k,v in self.Uf.state_dict().items()})
+                    self.Uu.load_state_dict({k:self.dropconnect(v) for k,v in self.Uu.state_dict().items()})
+                    self.Uo.load_state_dict({k:self.dropconnect(v) for k,v in self.Uo.state_dict().items()})
                 else:
                     h = h + h_k
                     summed_c = summed_c + f_k*c_k
@@ -269,13 +284,15 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
 
     def __init__(self, hidden_dim, output_dim, 
-        wvec_vals,gpuNum=-1,dropout=0.2):
+        wvec_vals,gpuNum=-1,dropout=0.0):
         super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.wvec=wvec_vals
         self.input_dim = np.size(wvec_vals,axis=1)
         self.lstm = nn.LSTMCell(self.input_dim, hidden_dim)
+        self.dropout = dropout
+        self.dropconnect = nn.Dropout(self.dropout)
         self.linear_rat = nn.Linear(hidden_dim, output_dim)
         self.gpuNum = gpuNum
         self.hidden_0 = self.init_hidden()
@@ -307,8 +324,13 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
                         else:
                             x = self.wvec[an_input,:]                        
                         if i==0:
-                            # set the first hidden
+                            # First iteration. Set the first hidden and dropout
                             hx, cx = self.lstm(x,self.hidden_0)
+                            lstm_params = self.lstm.state_dict()
+                            for k,v in lstm_params.items():
+                                if k.endswith('hh'):
+                                    lstm_params[k] = self.dropconnect(v)
+                            self.lstm.load_state_dict(lstm_params)
                         else:
                             hx, cx = self.lstm(x, (hx,cx))
                     # Accumulate vectors per sentence
