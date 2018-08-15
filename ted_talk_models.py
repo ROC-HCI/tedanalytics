@@ -136,11 +136,12 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
                 if i==0:
                     # set the first hidden
                     hx, cx = self.lstm(an_input,*self.hidden_0)
-                    lstm_params = self.lstm.state_dict()
-                    for k,v in lstm_params.items():
-                        if k.endswith('hh'):
-                            lstm_params[k] = self.dropconnect(v)
-                    self.lstm.load_state_dict(lstm_params)
+                    if hasattr(self,'dropconnect'):
+                        lstm_params = self.lstm.state_dict()
+                        for k,v in lstm_params.items():
+                            if k.endswith('hh'):
+                                lstm_params[k] = self.dropconnect(v)
+                        self.lstm.load_state_dict(lstm_params)
                 else:
                     hx, cx = self.lstm(an_input, hx,cx)
             # Feed through Linear
@@ -241,10 +242,11 @@ class TreeLSTM(nn.Module,ModelIO):
                     h = h_k
                     summed_c = f_k*c_k
                     # Apply dropconnect
-                    self.Ui.load_state_dict({k:self.dropconnect(v) for k,v in self.Ui.state_dict().items()})
-                    self.Uf.load_state_dict({k:self.dropconnect(v) for k,v in self.Uf.state_dict().items()})
-                    self.Uu.load_state_dict({k:self.dropconnect(v) for k,v in self.Uu.state_dict().items()})
-                    self.Uo.load_state_dict({k:self.dropconnect(v) for k,v in self.Uo.state_dict().items()})
+                    if hasattr(self,'dropconnect'):
+                        self.Ui.load_state_dict({k:self.dropconnect(v) for k,v in self.Ui.state_dict().items()})
+                        self.Uf.load_state_dict({k:self.dropconnect(v) for k,v in self.Uf.state_dict().items()})
+                        self.Uu.load_state_dict({k:self.dropconnect(v) for k,v in self.Uu.state_dict().items()})
+                        self.Uo.load_state_dict({k:self.dropconnect(v) for k,v in self.Uo.state_dict().items()})
                 else:
                     h = h + h_k
                     summed_c = summed_c + f_k*c_k
@@ -326,11 +328,12 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
                         if i==0:
                             # First iteration. Set the first hidden and dropout
                             hx, cx = self.lstm(x,self.hidden_0)
-                            lstm_params = self.lstm.state_dict()
-                            for k,v in lstm_params.items():
-                                if k.endswith('hh'):
-                                    lstm_params[k] = self.dropconnect(v)
-                            self.lstm.load_state_dict(lstm_params)
+                            if hasattr(self,'dropconnect'):
+                                lstm_params = self.lstm.state_dict()
+                                for k,v in lstm_params.items():
+                                    if k.endswith('hh'):
+                                        lstm_params[k] = self.dropconnect(v)
+                                self.lstm.load_state_dict(lstm_params)
                         else:
                             hx, cx = self.lstm(x, (hx,cx))
                     # Accumulate vectors per sentence

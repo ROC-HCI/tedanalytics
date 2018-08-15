@@ -110,15 +110,17 @@ def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
         y_gt.append(y)
     # Convert into a numpy array
     y_gt = np.array(y_gt)
-    # Calculate the median
+    # Calculate the thresholds
     thresh1 = sp.percentile(y_gt,firstThresh,axis=0)
-    thresh2 = sp.percentile(y_gt,firstThresh,axis=0)
+    thresh2 = sp.percentile(y_gt,secondThresh,axis=0)
+
     # Binarize in matrix format for speed
-    for i in range(np.size(y_gt,axis=1)):
+    cols = np.size(y_gt,axis=1)
+    for i in range(cols):
         y_gt[y_gt[:,i]<=thresh1[i],i] = -1
         y_gt[(thresh1[i]<y_gt[:,i])*(y_gt[:,i]<thresh2[i]),i] = 0
         y_gt[y_gt[:,i]>thresh2[i],i] = 1
-
+    
     # Convert to dictionary for convenience
     return {key:val.tolist() for key,val in zip(valid_talks,y_gt)},labels
 

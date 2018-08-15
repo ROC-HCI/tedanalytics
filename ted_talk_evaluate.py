@@ -1,3 +1,4 @@
+import glob
 import os
 import json
 import numpy as np
@@ -72,6 +73,33 @@ def evaluate_model(test_idx, model, loss_fn, data_feeder, \
     cp.dump(results,open(outfilename+'.pkl','wb'))
     return results
 
+def __evaluate_all_models__():
+    for alog in glob.glob('/scratch/mtanveer/TED_models/*.txt'):
+        print alog                                                                  
+        outname = alog.replace('LSTM_log','LSTM_results_dev').replace('.txt','.pkl')
+        # check if output exists          
+        outname = os.path.join('/scratch/mtanveer/TED_stats/Backup_results/',os.path.split(outname)[-1])
+        print 'output:',outname            
+        if os.path.exists(outname):        
+            print 'file already processed. skipping ...'
+            continue
+        evaluate_recurrent_models(alog)
+
+def __clean_existing_pkl__():
+    for alog in glob.glob('/scratch/mtanveer/TED_models/*.txt'):
+        outname = alog.replace('LSTM_log','LSTM_results_dev').replace('.txt','.pkl')
+        # check if output exists          
+        outname = os.path.join('/scratch/mtanveer/TED_stats/Backup_results/',os.path.split(outname)[-1])
+        if os.path.exists(outname):        
+            print 'file already exists. Moving the corresponding file from TED_models'
+            outname_id = outname.split('.')[-2]
+            for afile in glob.glob('/scratch/mtanveer/TED_models/*'+outname_id+'*'):
+                oldpath,filename = os.path.split(afile)
+                newfile = os.path.join(\
+                    '/scratch/mtanveer/TED_stats/Backup_results/',filename)
+                print afile,
+                print 'moved to:',newfile
+                os.rename(afile,newfile)
 
 def evaluate_recurrent_models(logfilename,test_id=list_of_talks.test_set):
     '''

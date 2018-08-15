@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import csv
+import itertools
 import numpy as np
 import cPickle as cp
 import matplotlib
@@ -123,7 +124,7 @@ def read_lstm_log(afile,averageonly=True):
 
 def tabulate_lstm_results_pkl(prefix='LSTM_results',\
     outfile='deep_learning_results.csv',ignoredfields = \
-    {'train','test','train_indices','test_indices','modality','order'}):
+    {'train','test','train_indices','test_indices','modality','order','dropout'}):
     '''
     Summarize all the LSTM evaluation results (stored in pkl file) with 
     a single csv file.
@@ -187,6 +188,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     '''
     Summarize all the LSTM training logs with a single figure
     '''
+    markers = itertools.cycle(markers)
     filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',\
         prefix+'*'))    
     fpath,fname = os.path.split(outfile)
@@ -229,11 +231,11 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     for i,alegend in zip(range(len(filenames)),legendtxts):
         trainloss = np.array(alldata['train'][i])        
         plt.plot(trainloss[:,1]/3600.,trainloss[:,2],color='blue',\
-            marker=markers[i],label='Train,'+alegend)
+            marker=markers.next(),label='Train,'+alegend)
         if 'test' in alldata and i in alldata['test']:
             testloss = np.array(alldata['test'][i])
             plt.plot(testloss[:,1]/3600.,testloss[:,2],\
-                color='red',marker=markers[i],label='Test,'+alegend)
+                color='red',marker=markers.next(),label='Test,'+alegend)
 
     plt.grid('on',which='major')
     plt.grid('on',which='minor')
@@ -254,11 +256,11 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         # draw plots
         trainloss = np.array(alldata['train'][i])
         plt.plot(trainloss[:,0],trainloss[:,2],color='blue',\
-            marker=markers[i],label='Train,'+alegend)
+            marker=markers.next(),label='Train,'+alegend)
         if 'test' in alldata and i in alldata['test']:
             testloss = np.array(alldata['test'][i])
             plt.plot(testloss[:,0],testloss[:,2],\
-                color='red',marker=markers[i],label='Dev,'+alegend)
+                color='red',marker=markers.next(),label='Dev,'+alegend)
     plt.grid('on',which='major')
     plt.grid('on',which='minor')
     plt.xlabel('Iterations')
