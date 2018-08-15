@@ -224,26 +224,72 @@ def exp5_run_in_Bluehive():
         max_iter_over_dataset = 48,
         GPUnum = 0)
 
+
 def exp6_run_in_Bluehive():
     '''
     Run the training and test module of the deep learning model with 
     appropriate parameters in Bluehive
     '''
     ttt.train_recurrent_models(
-        dataset_type = 'word-only',
-        firstThresh = 10.,
-        secondThresh = 90.,
+        dataset_type = 'depposword',
+        firstThresh = 30.,
+        secondThresh = 70.,
         scale_rating = True,
         flatten_sentence = False,
-        minibatch_size = 10,
+        minibatch_size = 30,
         hidden_dim = 128,
         output_folder = 'TED_models/',
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adam,
-        learning_rate = 0.0001,
-        weight_decay = 0.0033,
+        learning_rate = 0.00066,
+        weight_decay = 0.00066,
+        dropconnect=0.2,
         max_iter_over_dataset = 48,
-        GPUnum = 0)
+        GPUnum = -1)    
+
+def exp7_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'depposword',
+        firstThresh = 50.,
+        secondThresh = 50.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 30,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.00066,
+        weight_decay = 0.00066,
+        dropconnect=0.2,
+        max_iter_over_dataset = 48,
+        GPUnum = -1)    
+
+def exp8_run_in_Bluehive():
+    '''
+    Run the training and test module of the deep learning model with 
+    appropriate parameters in Bluehive
+    '''
+    ttt.train_recurrent_models(
+        dataset_type = 'word-only',
+        firstThresh = 30.,
+        secondThresh = 70.,
+        scale_rating = True,
+        flatten_sentence = False,
+        minibatch_size = 30,
+        hidden_dim = 128,
+        output_folder = 'TED_models/',
+        train_test_ratio = 0.90,
+        optimizer_fn = optim.Adam,
+        learning_rate = 0.00066,
+        weight_decay = 0.00066,
+        dropconnect=0.2,
+        max_iter_over_dataset = 48,
+        GPUnum = 0)    
 
 if __name__=='__main__':
     # Control from here which experiment is going to run

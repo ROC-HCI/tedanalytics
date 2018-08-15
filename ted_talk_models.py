@@ -167,12 +167,12 @@ class LSTM_custom(nn.Module,ModelIO):
 
     def forward(self,x,hidden):
         h,c = hidden[0],hidden[1]
-        i = F.sigmoid(self.W_xi(x) + self.W_hi(h))
-        f = F.sigmoid(self.W_xf(x) + self.W_hf(h))
-        g = F.tanh(self.W_xg(x) + self.W_hg(h))
-        o = F.sigmoid(self.W_xo(x)+self.W_ho(h))
+        i = torch.sigmoid(self.W_xi(x) + self.W_hi(h))
+        f = torch.sigmoid(self.W_xf(x) + self.W_hf(h))
+        g = torch.tanh(self.W_xg(x) + self.W_hg(h))
+        o = torch.sigmoid(self.W_xo(x)+self.W_ho(h))
         c_ = f*c + i*g
-        h_ = o * F.tanh(c_)
+        h_ = o * torch.tanh(c_)
         return h_,c_
 
 class TreeLSTM(nn.Module,ModelIO):
@@ -190,8 +190,8 @@ class TreeLSTM(nn.Module,ModelIO):
         self.gpuNum = gpuNum
         self.h0, self.c0 = self.init_hidden()
         # Learnable parameters
-        self.depembedding = nn.Embedding(len(depidx),np.ceil(input_dim/2.))
-        self.posembedding = nn.Embedding(len(posidx),np.floor(input_dim/2.))
+        self.depembedding = nn.Embedding(len(depidx),int(np.ceil(input_dim/2.)))
+        self.posembedding = nn.Embedding(len(posidx),int(np.floor(input_dim/2.)))
         if includewords:
             input_dim = input_dim + 300
         self.input_dim = input_dim
@@ -236,7 +236,7 @@ class TreeLSTM(nn.Module,ModelIO):
                     # as the initial hidden value
                     h_k,c_k = self.h0,self.c0                
                 # Child-wise forget gate
-                f_k = F.sigmoid(self.Wf(x)+self.Uf(h_k))
+                f_k = torch.sigmoid(self.Wf(x)+self.Uf(h_k))
                 if ind == 0:
                     # first iteration
                     h = h_k
@@ -252,13 +252,13 @@ class TreeLSTM(nn.Module,ModelIO):
                     summed_c = summed_c + f_k*c_k
         # Now process the current node
         # input gate
-        i = F.sigmoid(self.Wi(x) + self.Ui(h))
+        i = torch.sigmoid(self.Wi(x) + self.Ui(h))
         # output gate
-        o = F.sigmoid(self.Wo(x)+self.Uo(h))
+        o = torch.sigmoid(self.Wo(x)+self.Uo(h))
         # data
-        u = F.tanh(self.Wu(x) + self.Uu(h))
+        u = torch.tanh(self.Wu(x) + self.Uu(h))
         c_k = i*u + summed_c
-        h_k = o * F.tanh(c_k)
+        h_k = o * torch.tanh(c_k)
         return h_k,c_k
 
     def forward(self,minibatch):

@@ -564,6 +564,7 @@ def classify_multimodal(classifier='logistic_l1',c_scale = 1.,nb_tr_iter=10,
 
     Y,ylabels=ttdf.binarized_ratings(firstThresh=lowerthresh_Y,\
         secondThresh=upperthresh_Y,scale_rating=scale_rating)
+    Y = {akey:[1 if y == 1 else -1 for y in Y[akey]] for akey in Y}
 
     allresults = {}
     for i,kw in enumerate(ylabels):

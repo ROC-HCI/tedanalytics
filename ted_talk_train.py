@@ -451,7 +451,6 @@ def __compute_loss__(log_probs,minibatch,loss_fn,lossweight):
     count=0.
     weights = torch.ones_like(log_probs[0])*lossweight
     loss_fn = loss_fn(pos_weight = weights)
-    import pdb; pdb.set_trace()  # breakpoint e20d3d02 //
     for i,an_item in enumerate(minibatch):        
         losslist.append(loss_fn(log_probs[i],an_item['Y']))
         count+=1.
