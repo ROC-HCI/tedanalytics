@@ -119,7 +119,7 @@ class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
         self.hidden_0 = self.init_hidden() 
         # Set loss function
         with torch.no_grad():
-            self.loss_fn = nn.NLLLoss()
+            self.loss_fn = nn.NLLLoss
         # GPUtize itself
         ttdf.gputize(self,self.gpuNum)
 
@@ -207,7 +207,7 @@ class TreeLSTM(nn.Module,ModelIO):
         self.dropout = dropout
         self.dropconnect = nn.Dropout(self.dropout)        
         # Set loss function
-        self.loss_fn = nn.BCEWithLogitsLoss()        
+        self.loss_fn = nn.BCEWithLogitsLoss
         # GPUtizing itself is necessary for ModelIO
         ttdf.gputize(self,self.gpuNum)        
 
@@ -302,7 +302,7 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
         self.oov = ttdf.variablize(np.zeros((1,self.input_dim)\
             ).astype(np.float32),self.gpuNum)
         # Set loss function
-        self.loss_fn = nn.BCEWithLogitsLoss()        
+        self.loss_fn = nn.BCEWithLogitsLoss
         # GPUtizing itself is necessary for ModelIO
         ttdf.gputize(self,self.gpuNum)        
 
@@ -414,7 +414,7 @@ class SyntacticSemanticEngine(nn.Module,ModelIO):
         self.activation = activation
         self.final_activation = final_activation
         # Set loss function
-        self.loss_fn = nn.KLDivLoss(size_average=False)
+        self.loss_fn = nn.KLDivLoss
         # GPUtize itself
         ttdf.gputize(self,self.gpu)
     
@@ -605,7 +605,7 @@ class RevisedTreeEncoder(nn.Module,ModelIO):
         self.final_activation = final_activation
 
         # Set loss function
-        self.loss_fn = nn.KLDivLoss(size_average=False)        
+        self.loss_fn = nn.KLDivLoss
 
         # GPUtize itself
         ttdf.gputize(self,self.gpu)

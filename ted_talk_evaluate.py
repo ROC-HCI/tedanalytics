@@ -194,7 +194,9 @@ def get_results(logdata,model,test_indices):
                     temp = map(lambda x:x.squeeze().numpy().tolist(),model_output)
                 except TypeError:
                     temp = map(lambda x:x.squeeze().cpu().numpy().tolist(),model_output)
-        pred = map(lambda x:[float(an_x>0.5) for an_x in x],temp)
+
+        pred_threshold = 0.5
+        pred = map(lambda x:[float(an_x>pred_threshold) for an_x in x],temp)
         try:
             a_gt = [an_item['Y'].numpy().squeeze().tolist() for an_item in minibatch]
         except TypeError:

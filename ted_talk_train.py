@@ -279,6 +279,7 @@ def train_recurrent_models(
     print 'done'
 
     # Get loss function matching the model
+    lossweight = float(secondThresh)/float(100. - secondThresh)
     loss_fn = model.loss_fn
 
     # Initialize the optimizer
@@ -367,7 +368,7 @@ def train_recurrent_models(
                 log_probs = model(minibatch)
 
                 # Calculate the loss
-                loss = __compute_loss__(log_probs,minibatch,loss_fn)
+                loss = __compute_loss__(log_probs,minibatch,loss_fn,lossweight)
                 # Backpropagation of the gradients
                 lossval = loss.cpu().data.numpy()
                 loss.backward()
@@ -404,7 +405,7 @@ def train_recurrent_models(
                     # Forward pass through the model                
                     log_probs = model(minibatch_test)
                     # Calculate the loss
-                    loss_test = __compute_loss__(log_probs,minibatch_test,loss_fn)
+                    loss_test = __compute_loss__(log_probs,minibatch_test,loss_fn,lossweight)
                     lossval_test = loss_test.cpu().data.numpy()
             
                 # Logging the current status
@@ -439,9 +440,18 @@ def resume_recurrent_training():
     '''
     raise NotImplementedError
 
-def __compute_loss__(log_probs,minibatch,loss_fn):
+def __compute_loss__(log_probs,minibatch,loss_fn,lossweight):
+    '''
+    Compute the loss. It is important to make sure that loss function
+    appropriately reflect the class distribution. That is, the false
+    negatives should be weighted proportionally higher when the negative
+    class has more data points than the positive class.
+    '''
     losslist = []
-    count=0.    
+    count=0.
+    weights = torch.ones_like(log_probs[0])*lossweight
+    loss_fn = loss_fn(pos_weight = weights)
+    import pdb; pdb.set_trace()  # breakpoint e20d3d02 //
     for i,an_item in enumerate(minibatch):        
         losslist.append(loss_fn(log_probs[i],an_item['Y']))
         count+=1.
