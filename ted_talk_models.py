@@ -177,11 +177,131 @@ class LSTM_custom(nn.Module,ModelIO):
 
 class TreeLSTM(nn.Module,ModelIO):
     '''
-    A custom implementation of childsum TreeLSTM in pytorch.
+    A custom implementation of childsum TreeLSTM in pytorch. It is designed
+    to feed dependency trees in the TED Talk Project. The input is formatted
+    to take a dependency type and POS tag indices corresponding to each word.
+    These indices are used to utilize their corresponding dense embedding vectors.
+    These embedding vectors are concatenated to the word vectors to construct the
+    input vectors.
+
+    The model utilizes the dropconnect scheme described here:
+    https://cs.nyu.edu/~wanli/dropc/dropc.pdf
     '''
     def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
         includewords=False,gpuNum=-1,dropout = 0.0):
         super(TreeLSTM,self).__init__()
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.depidx = depidx
+        self.posidx = posidx
+        self.includewords = includewords
+        self.gpuNum = gpuNum
+        self.h0, self.c0 = self.init_hidden()
+        # Learnable parameters
+        self.depembedding = nn.Embedding(len(depidx),int(np.ceil(input_dim/2.)))
+        self.posembedding = nn.Embedding(len(posidx),int(np.floor(input_dim/2.)))
+        if includewords:
+            input_dim = input_dim + 300
+        self.input_dim = input_dim
+        self.Wi = nn.Linear(input_dim,hidden_dim)
+        self.Wf = nn.Linear(input_dim,hidden_dim)
+        self.Wu = nn.Linear(input_dim,hidden_dim)
+        self.Wo = nn.Linear(input_dim,hidden_dim)        
+        self.Ui = nn.Linear(hidden_dim,hidden_dim)
+        self.Uf = nn.Linear(hidden_dim,hidden_dim)
+        self.Uu = nn.Linear(hidden_dim,hidden_dim)
+        self.Uo = nn.Linear(hidden_dim,hidden_dim)
+        self.linear_rat = nn.Linear(hidden_dim,output_dim)
+        self.dropout = dropout
+        self.dropconnect = nn.Dropout(self.dropout)        
+        # Set loss function
+        self.loss_fn = nn.BCEWithLogitsLoss
+        # GPUtizing itself is necessary for ModelIO
+        ttdf.gputize(self,self.gpuNum)        
+
+    def init_hidden(self):
+        nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
+        return (ttdf.variablize(nullvec.copy(),self.gpuNum),
+                ttdf.variablize(nullvec.copy(),self.gpuNum))
+
+    def encodetree(self,atree):
+        # Loop over all the children
+        for ind,anode in enumerate(atree):
+            if type(anode) is tuple:
+                depvec = self.depembedding(anode[0])
+                posvec = self.posembedding(anode[1])                
+                if len(anode)==2:
+                    x = torch.cat((depvec,posvec)).view(1,-1)
+                else:
+                    x = torch.cat((depvec,posvec,anode[2])).view(1,-1)
+
+                # Look ahead if the next node is a subtree. If yes
+                # process it first
+                if ind < len(atree)-1 and type(atree[ind+1])==list:
+                    h_k,c_k = self.encodetree(atree[ind+1])
+                else:
+                    # For leaf node, child hidden value is the same
+                    # as the initial hidden value
+                    h_k,c_k = self.h0,self.c0                
+                # Child-wise forget gate
+                f_k = torch.sigmoid(self.Wf(x)+self.Uf(h_k))
+                if ind == 0:
+                    # first iteration
+                    h = h_k
+                    summed_c = f_k*c_k
+                    # Apply dropconnect
+                    if hasattr(self,'dropconnect'):
+                        self.Ui.load_state_dict({k:self.dropconnect(v) for k,v in self.Ui.state_dict().items()})
+                        self.Uf.load_state_dict({k:self.dropconnect(v) for k,v in self.Uf.state_dict().items()})
+                        self.Uu.load_state_dict({k:self.dropconnect(v) for k,v in self.Uu.state_dict().items()})
+                        self.Uo.load_state_dict({k:self.dropconnect(v) for k,v in self.Uo.state_dict().items()})
+                else:
+                    h = h + h_k
+                    summed_c = summed_c + f_k*c_k
+        # Now process the current node
+        # input gate
+        i = torch.sigmoid(self.Wi(x) + self.Ui(h))
+        # output gate
+        o = torch.sigmoid(self.Wo(x)+self.Uo(h))
+        # data
+        u = torch.tanh(self.Wu(x) + self.Uu(h))
+        c_k = i*u + summed_c
+        h_k = o * torch.tanh(c_k)
+        return h_k,c_k
+
+    def forward(self,minibatch):
+        outrating = []
+        for an_item in minibatch:
+            # Feed each tree through TreeLSTM
+            outsum = self.h0
+            count = 0.
+            for atree in an_item['X']:
+                h,c = self.encodetree(atree)
+                # Accumulate vectors per sentence
+                outsum = outsum + h
+                count = count + 1.
+            # Bag-of-Sentences Model
+            h = outsum/count
+            # Pass the output through feed-forward
+            rat_scores = self.linear_rat(h).view(-1,1)
+            outrating.append(rat_scores)
+        return outrating
+
+class TreeLSTM_with_Prosody(nn.Module,ModelIO):
+    '''
+    A custom implementation of childsum TreeLSTM in pytorch. It is designed
+    to feed dependency trees in the TED Talk Project. The input is formatted
+    to take a dependency type and POS tag indices corresponding to each word.
+    These indices are used to utilize their corresponding dense embedding vectors.
+    These embedding vectors are concatenated to the word vectors to construct the
+    input vectors.
+
+    The model utilizes the dropconnect scheme described here:
+    https://cs.nyu.edu/~wanli/dropc/dropc.pdf
+    '''
+    def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
+        includewords=False,gpuNum=-1,dropout = 0.0):
+        super(TreeLSTM_with_Prosody,self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.depidx = depidx
@@ -361,6 +481,7 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
 
 class SyntacticSemanticEngine(nn.Module,ModelIO):
     '''
+    OBSOLETE
     Syntactic Semantic Engine is a new model for representing a dependency
     tree along with the distributed representations of the corresponding words.
     TODO: gputize the wordvectors early
@@ -526,6 +647,7 @@ class SyntacticSemanticEngine(nn.Module,ModelIO):
 
 class RevisedTreeEncoder(nn.Module,ModelIO):
     '''
+    OBSOLETE
     A revised (as of Feb 26th, 2018) version of the Syntactic Semantic Engine.
     TODO: Test Thoroughly
     TODO: gputize the wordvectors early

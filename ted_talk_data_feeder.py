@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import glob
 import csv
@@ -6,6 +7,7 @@ import threading
 import cPickle as cp
 import numpy as np
 import scipy as sp
+from scipy.signal import resample
 from functools import partial
 import multiprocessing as mp
 from itertools import izip_longest
@@ -432,7 +434,7 @@ def variablize(input,gpuNum):
     else:
         return Variable(torch.from_numpy(input))
 
-def get_minibatch_iter(dataset,minibatch_size,datakeys=['X','Y']):
+def get_minibatch_iter(dataset,minibatch_size,skipkeys={'ylabel'}):
     '''
     Iterator for a shuffled and variablized minibatch. This method correctly
     handles the dataset.flatten_sentence flag.
@@ -445,7 +447,8 @@ def get_minibatch_iter(dataset,minibatch_size,datakeys=['X','Y']):
         for i in range(0,len(idx),minibatch_size):
             batch = []
             for j in range(i,min(len(idx),i+minibatch_size)):
-                adata = {akey:dataset[idx[j]][akey] for akey in datakeys}
+                adata = {akey:dataset[idx[j]][akey] \
+                    for akey in dataset[idx[j]] if not akey in skipkeys}
                 batch.append(adata)
             yield batch
     else:
@@ -453,11 +456,13 @@ def get_minibatch_iter(dataset,minibatch_size,datakeys=['X','Y']):
             batch = []
             for j in range(i,min(len(idx),i+minibatch_size)):
                 adata={}
-                for akey in datakeys:
-                    if akey=='X':
-                        adata[akey]=[asent for asent in dataset[idx[j]][akey]]
-                    else:
-                        adata[akey]=dataset[idx[j]][akey]
+                for akey in dataset[idx[j]]:
+                    if akey in skipkeys:
+                        continue
+                    # if akey=='X':
+                    #     adata[akey]=[asent for asent in dataset[idx[j]][akey]]
+                    # else:
+                    adata[akey]=dataset[idx[j]][akey]
                 batch.append(adata)
             yield batch
 
@@ -608,8 +613,6 @@ class TED_Rating_Averaged_Dataset(Dataset):
         sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
         sentdat = sentdat['sentences']
         prosdat,_ = read_prosody_per_sentence(talkid)
-        import pdb; pdb.set_trace()  # breakpoint 73c0521b //
-
 
         outvec=[]
         # Second best candidate for data parallelization. CPU multithreading
@@ -854,6 +857,159 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
             self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
         return {'X':coded_dtrees,'Y':yval,'ylabel':self.ylabel}
 
+def __read_ooTextFile__(filename):
+    '''
+    Read prosody files
+    '''
+    dir_pros = os.path.join(ted_data_path,'TED_feature_prosody',
+        'full_video_raw')
+    dat = open(os.path.join(dir_pros,filename)).read().split('\n')
+    if not dat:
+        raise IOError('Empty file')
+    if not dat[0]=='File type = "ooTextFile"':
+        raise IOError('File type not recognized')
+    if not dat[1] in {'Object class = "Pitch 1"',
+        'Object class = "Intensity 2"', 'Object class = "Formant 2"'}:
+        raise IOError('Object class not recognized')
+
+    if dat[1].endswith('"Pitch 1"'):        
+        samples = []
+        filelen = len(dat)
+        i = 0
+        while i < filelen:
+            if dat[i].strip().startswith('nx'):
+                N = int(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('dx'):
+                rate = 1/float(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('ceiling'):
+                ceiling = float(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('nCandidates'):
+                nCandidates = int(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('candidate [1]'):
+                pitch_freq = float(dat[i+1].split('=')[-1].strip())
+                samples.append(pitch_freq)
+                i += (nCandidates-1)*3 + 2
+                continue
+            i+=1
+        return {'rate':rate,'N':N,'ceiling':ceiling,\
+            'samples':np.array(samples,dtype=np.float32)[None]}
+    elif dat[1].endswith('"Intensity 2"'):
+        samples = []
+        filelen = len(dat)
+        i = 0
+        while i < filelen:
+            if dat[i].strip().startswith('nx'):
+                N = int(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('dx'):
+                rate = 1/float(dat[i].split('=')[-1].strip())
+            else:
+                output = re.match(r'z \[1\] \[\d*\] = (-?\d*\.?\d*)',\
+                    dat[i].strip())
+                if output:
+                    loud = float(output.group(1))
+                    samples.append(loud)
+            i+=1
+        return {'rate':rate,'N':N,'samples':np.array(samples,dtype=np.float32)[None]}
+    elif dat[1].endswith('"Formant 2"'):
+        samples = []
+        filelen = len(dat)
+        i = 0
+        while i < filelen:
+            if dat[i].strip().startswith('nx'):
+                N = int(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('dx'):
+                rate = 1/float(dat[i].split('=')[-1].strip())
+            elif dat[i].strip().startswith('maxnFormants'):
+                maxnFormants = int(dat[i].split('=')[-1].strip())
+                maxnFormants = min(maxnFormants,3)
+            elif dat[i].strip().startswith('nFormants'):
+                nFormants = int(dat[i].split('=')[-1].strip())
+                formantlist = [0.]*(maxnFormants*2)
+            elif dat[i].strip().startswith('formant'):
+                output = re.match(r'formant \[([1-{0}])\]:'.format(\
+                    min(nFormants,maxnFormants)),dat[i].strip())
+                if output:
+                    i_form = int(output.group(1))
+                    form_freq = float(dat[i+1].split('=')[-1].strip())
+                    form_bw = float(dat[i+2].split('=')[-1].strip())
+                    formantlist[(i_form-1)*2] = form_freq
+                    formantlist[(i_form-1)*2+1] = form_bw
+                    if i_form == min(nFormants,maxnFormants):
+                        samples.append(formantlist)
+                    i+=2
+                    continue
+            i+=1
+        return {'rate':rate,'N':N,'samples':np.array(samples,dtype=np.float32).T}
+
+def read_raw_prosody_per_sentence(atalk,interp_len=50,gpuNum=-1):
+    '''
+    Returns interpolated nonverbal features within the
+    boundaries of each sentence in the transcript. The signals
+    are interpolated and z-score normalized.
+    The original time lengths of the sentences are also returned.
+    The mean and std of the signals are also returned.
+    '''
+    dir_boun = os.path.join(ted_data_path,'TED_feature_word_boundary')
+    pitch = __read_ooTextFile__(str(atalk)+'.pitch')
+    form = __read_ooTextFile__(str(atalk)+'.formant')
+    loud = __read_ooTextFile__(str(atalk)+'.loud')
+    min_len = min(pitch['N'],form['N'],loud['N'])
+    assert pitch['rate']==form['rate']==loud['rate'],'Signal rates are not equal'
+
+    prosody = np.concatenate((pitch['samples'][:,:min_len],\
+        loud['samples'][:,:min_len],form['samples'][:,:min_len]),axis=0)
+    prosody[prosody==0.]=np.nan
+    mean_pros = np.nanmean(prosody,axis=1)[None].T
+    std_pros = np.nanstd(prosody,axis=1)[None].T
+    prosody = (prosody - mean_pros)/std_pros
+    np.nan_to_num(prosody,False)
+
+    data_boun = cp.load(open(os.path.join(dir_boun,str(atalk)+'.pkl')))
+    sent_bounds = get_sent_boundary(atalk)
+
+    prosody_per_sent = {}
+    for sentid in sent_bounds:
+        st = sent_bounds[sentid][0]
+        en = sent_bounds[sentid][1]
+        if en<st:
+            continue
+        l = max(0,int(st*pitch['rate']))
+        r = min(int(en*pitch['rate']),np.size(prosody,axis=1))
+        chunk = prosody[:,l:r]
+        if np.size(chunk,axis=1)==0:
+            continue
+        chunk_interp = resample(chunk,interp_len,axis=1)
+
+        chunk_interp = variablize(chunk_interp,gpuNum)
+        sent_len = torch.tensor([en-st],dtype=chunk_interp.dtype,\
+            device=chunk_interp.device)
+        prosody_per_sent[sentid] = (chunk_interp,sent_len)
+    return prosody_per_sent, variablize(mean_pros,gpuNum), \
+        variablize(std_pros,gpuNum)
+
+class TED_Rating_depPOSnorverbal_Dataset(TED_Rating_depPOSonly_indices_Dataset):
+    """TED rating dataset.
+    The dependency type, POS and nonverbal modalities are used.
+    The data is gputized and variablized. This dataset doesn't support
+    flatten_sentence = True.
+    It must be processed using an RNN and a CNN.
+    """
+    def __getitem__(self, idx):
+        '''
+        Given a data index (not videoid), get the corresponding data
+        '''
+        talkid = self.data_indices[idx]
+        deptrees = get_dep_rating(talkid,process_ratings=False)
+        coded_dtrees = map(self.__convert_atree__,deptrees)
+        prosody_per_sent,mean_,std_ = read_raw_prosody_per_sentence(talkid,\
+            gpuNum=self.gpunum)
+        # Process the labels
+        yval = variablize(np.reshape([1 if alab == 1 else 0 for alab in \
+            self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
+        return {'X':coded_dtrees, 'X_pros':prosody_per_sent,
+          'X_pros_mean':mean_,'X_pros_std':std_,'Y':yval,
+          'ylabel':self.ylabel}
+
 class wvec_index_maker():
     '''
     A class to convert the transcript of any talk to a list of word-vector indices.
@@ -1020,6 +1176,172 @@ def get_data_iter_simple(dataset,batch_size=4,shuffle=True,
         num_workers=mp.cpu_count()-1,collate_fn=partial(collate_fn,
         gpuNum=gpuNum),pin_memory=pin_memory)
     return dataiter
+
+def __buildalign2trmap__(alist,blist):
+    '''
+    Aligns two transcripts word by word and returns backpointer
+    '''
+    # initialization
+    d = np.zeros((len(alist)+1,len(blist)+1))
+    bp = np.zeros((len(alist)+1,len(blist)+1),dtype='i2,i2')
+    if not (alist and blist):
+        raise ValueError('Atleast one list is empty')
+    d[:,0]=np.arange(np.size(d,axis=0))
+    d[0,:]=np.arange(np.size(d,axis=1))        
+    # Build up the distance and backpointer tables
+    for i in range(1,len(alist)+1):
+        for j in range(1,len(blist)+1):
+            choices = [d[i-1,j]+1,d[i,j-1]+1,d[i-1,j-1]+2 \
+                            if not alist[i-1]==blist[j-1] else d[i-1,j-1]]
+            temp = np.argmin(choices)
+            d[i,j] = choices[temp]
+            bp[i,j] = [(i-1,j),(i,j-1),(i-1,j-1)][temp]
+    # Build up the alignment from alist to blist
+    align2trmap = {idx:-1 for idx in range(len(alist))}
+    nd = (-1,-1)    
+    while not (nd[0]==0 and nd[1]==0):
+        p_nd = bp[nd[0],nd[1]]
+        if d[nd[0],nd[1]] == d[p_nd[0],p_nd[1]]:
+            align2trmap[p_nd[0]]=p_nd[1]
+        nd = p_nd.copy()
+    return align2trmap
+
+def get_sent_boundary(atalk,computeAll=False):
+    '''
+    Returns the sentence boundary corresponding to each dependency tree in TED_meta.
+    If the data is not available in TED_meta, it computes the data using the follwoing
+    function: align_fave_transcript_to_word_boundary
+    Once computed, it adds the info to TED_meta for faster processing next time.
+    '''
+    dir_meta = os.path.join(ted_data_path,'TED_meta')
+    file_meta = os.path.join(dir_meta,str(atalk)+'.pkl')
+    data_meta = cp.load(open(file_meta))
+
+    dataexists = all(akey in data_meta for akey in ['wordlist_meta_sent', 'sent2wordmap',\
+     'wordlist_bound_sent', 'alignmentmap', 'word_2_time_map', 'sent_2_time_map'])
+
+    if not dataexists or computeAll:
+        wordlist_meta_sent, sent2wordmap, wordlist_bound_sent, alignmentmap, \
+          word_2_time_map, sent_2_time_map = align_fave_transcript_to_word_boundary(atalk)
+        data_meta['wordlist_meta_sent']=wordlist_meta_sent
+        data_meta['sent2wordmap']=sent2wordmap
+        data_meta['wordlist_bound_sent']=wordlist_bound_sent
+        data_meta['alignmentmap']=alignmentmap
+        data_meta['word_2_time_map']=word_2_time_map
+        data_meta['sent_2_time_map']=sent_2_time_map
+        cp.dump(data_meta,open(file_meta,'wb'))
+
+    return data_meta['sent_2_time_map']
+
+
+def align_fave_transcript_to_word_boundary(atalk):
+    '''
+    Aligns each sentence in fave_style_transcript for TED_meta with the
+    words in TED_feature_word_boundary. In returns the following:
+    a) wordlist_meta_sent: list of words in fave_style_transcript
+    b) sent2wordmap: For each sentence in fave_style_transcript the first and last word index
+    c) wordlist_bound_sent: list of words in TED_feature_word_boundary
+    d) alignmentmap: a map from index of wordlist_meta_sent to index of wordlist_bound_sent
+    e) word_2_time_map: start and end time for index of wordlist_bound_sent
+    f) sent_2_time_map: start and end time for each sentence in fave_style_transcript
+    '''
+    dir_meta = os.path.join(ted_data_path,'TED_meta')
+    dir_boun = os.path.join(ted_data_path,'TED_feature_word_boundary')
+    data_meta = cp.load(open(os.path.join(dir_meta,str(atalk)+'.pkl')))
+    data_boun = cp.load(open(os.path.join(dir_boun,str(atalk)+'.pkl')))
+
+    # Build a list of words from TED_feature_word_boundary (wordlist_bound_sent)
+    word_2_time_map={}
+    wordlist_bound_sent=[]
+    n = len(data_boun['sentences'])
+    for j in range(n):
+        for aword in data_boun['sentences'][j]['word_time_boundaries']:
+            if aword[0]=='sp' or aword[0]=='STOP':
+                continue
+            wordlist_bound_sent.append(aword[0])
+            word_2_time_map[len(word_2_time_map)] = aword[1:]
+    # Words from each sentence of TED_meta
+    sent2wordmap = {}
+    wordcount = 0
+    frm = 0
+    wordlist_meta_sent=[]
+    alignmentmap={}
+    sent_2_time_map={}
+    # loop over each sentence in fave_style_transcript
+    m = len(data_meta['dep_2_fave'])
+    buffer = 5
+    for i in range(m):
+        # Pick each sentence from the fave_style_transcript, make a combined list of
+        # the words (wordlist_meta_sent) and a map that points to the indices of the
+        # words for each sentence
+        paraID,sentID = data_meta['dep_2_fave'][i]
+        meta_sent = data_meta['fave_style_transcript'][paraID]['sentences'][sentID].upper()
+        meta_sent = re.sub(r'[^\w\d\s]',' ',meta_sent).strip()
+        meta_sent = re.sub(r'\s+',' ',meta_sent)
+        temp_wordlist = meta_sent.split()
+        if not temp_wordlist:
+            continue
+        wordlist_meta_sent.extend(temp_wordlist)
+        sent2wordmap[i]=(wordcount,wordcount+len(temp_wordlist))
+        wordcount = len(wordlist_meta_sent)
+        # Align words from fave_style_transcript with the list of words from 
+        # TED_feature_word_boundary (wordlist_bound_sent)
+        upto = min(frm+len(temp_wordlist)+buffer,len(wordlist_bound_sent))
+        buffer = 5
+        if frm==upto:
+            continue
+        tempMap = __buildalign2trmap__(temp_wordlist,wordlist_bound_sent[frm:upto])
+        if all(aval==-1 for aval in tempMap.values()):
+            print temp_wordlist
+            print wordlist_bound_sent[frm:upto]
+            buffer = 5 + len(temp_wordlist)
+            continue
+
+        alignmentmap.update({k+sent2wordmap[i][0]:frm+v \
+            for k,v in tempMap.items() if not v == -1})
+        frm = alignmentmap.values()[-1]+1
+        # Compute sentence boundary in time
+        # find a valid left and right edge of the sentence
+        left = sent2wordmap[i][0]
+        right = sent2wordmap[i][1]
+        while not left in alignmentmap or alignmentmap[left] == -1:
+            left+=1
+        while not right in alignmentmap or alignmentmap[right] == -1:
+            right-=1
+        if left>right:
+            raise IOError('Sentence edges not found')
+        left = alignmentmap[left]
+        right = alignmentmap[right]
+        sent_2_time_map[i]=(word_2_time_map[left][0],word_2_time_map[right][1])
+    return wordlist_meta_sent, sent2wordmap, wordlist_bound_sent, \
+        alignmentmap, word_2_time_map, sent_2_time_map
+
+def __sent_len_hist__():
+    import matplotlib.pyplot as plt
+    bounds=[]                                   
+    for i,atalk in enumerate(all_valid_talks):  
+        print atalk,'...',                      
+        bound = ttdf.get_sent_boundary(atalk)
+        for akey in bound:                 
+            sent_len=bound[akey][1]-bound[akey][0]
+            print i,sent_len
+            bounds.append(sent_len)
+        print 'Done'
+    plt.figure(0)
+    plt.clf()
+    plt.hist(bounds,50)
+    plt.xlabel('Length of a sentence (seconds)')
+    plt.ylabel('Count')
+    plt.tight_layout()
+    plt.savefig('sentence_length_hist.pdf')
+    plt.figure(1)
+    plt.clf()
+    plt.hist(bounds,50)
+    plt.yscale('log', nonposy='clip')
+    plt.xlabel('Length of a sentence (seconds)')
+    plt.ylabel('Count')
+    plt.tight_layout()
+    plt.savefig('sentence_length_hist_log.pdf')
 
 def main():
     '''

@@ -53,6 +53,9 @@ for arow in reader:
         if test_set and atalk in test_set:
             test_set_ratings[atalk]={ratings:int(arow[ratings]) for ratings in rating_labels}
             continue
+        # Skip the talks having partial data. Missing TED_feature_word_boundary in this case
+        if atalk in {1379,2744}:
+          continue
         all_valid_talks.append(atalk)
         all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}
 if test_set:

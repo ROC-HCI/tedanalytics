@@ -76,7 +76,7 @@ def prs(aline):
 
 def __get_rand_id__(filename):
     spltfile = filename.split('.')
-    if len(spltfile)>2 and len(spltfile[-2])>=12 and \
+    if len(spltfile)>2 and len(spltfile[-2])>=9 and \
         type(__tonum__(spltfile[-2]))==float:
         return int(spltfile[-2])
     else:
@@ -207,9 +207,13 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     unique=[]
     nonunique=[]
     for akey in alldata:
-        if not akey in ignoredfields and len(set(alldata[akey].values()))==1:
+        if not akey in ignoredfields and \
+            not 'class' in akey and \
+            len(set(alldata[akey].values()))==1:
             unique.append(akey)
-        elif not akey in ignoredfields and len(set(alldata[akey].values()))>1:
+        elif not akey in ignoredfields and \
+            not 'class' in akey and \
+            len(set(alldata[akey].values()))>1:
             nonunique.append(akey)
     
     # Make legends for the nonunique parameters 
@@ -254,13 +258,14 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     plt.clf()
     for i,alegend in zip(range(len(filenames)),legendtxts):
         # draw plots
+        m_type = markers.next()
         trainloss = np.array(alldata['train'][i])
         plt.plot(trainloss[:,0],trainloss[:,2],color='blue',\
-            marker=markers.next(),label='Train,'+alegend)
+            marker=m_type,label='Train,'+alegend)
         if 'test' in alldata and i in alldata['test']:
             testloss = np.array(alldata['test'][i])
             plt.plot(testloss[:,0],testloss[:,2],\
-                color='red',marker=markers.next(),label='Dev,'+alegend)
+                color='red',marker=m_type,label='Dev,'+alegend)
     plt.grid('on',which='major')
     plt.grid('on',which='minor')
     plt.xlabel('Iterations')

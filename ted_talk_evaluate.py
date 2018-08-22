@@ -111,8 +111,9 @@ def evaluate_recurrent_models(logfilename,test_id=list_of_talks.test_set):
     # create output file
     output1 = logfilename.replace('LSTM_log','LSTM_results_dev').replace('.txt','.pkl')
     output2 = logfilename.replace('LSTM_log','LSTM_results_finaltest').replace('.txt','.pkl')
-    # Load log data and model
+    # Load log data and model    
     logdata = ttr.read_lstm_log(logfilename)
+
     # Model will be loaded in the cpu/GPU according to the log
     model = ttm.load_model(modelfilename,logdata['modelclassname'])
     ttdf.gputize(model,model.gpuNum)

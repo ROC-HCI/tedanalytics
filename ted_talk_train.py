@@ -231,6 +231,16 @@ def train_recurrent_models(
             data_indices=test_id,firstThresh = firstThresh,
             secondThresh = secondThresh,scale_rating = scale_rating,
             wvec_index_maker=wvec,gpuNum=GPUnum)
+    elif dataset_type == 'depposwordprosody':
+        wvec=ttdf.wvec_index_maker(gpuNum=GPUnum)
+        train_dataset = ttdf.TED_Rating_depPOSnorverbal_Dataset(
+            data_indices=train_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            wvec_index_maker=wvec,gpuNum=GPUnum)
+        test_dataset = ttdf.TED_Rating_depPOSnorverbal_Dataset(
+            data_indices=test_id,firstThresh = firstThresh,
+            secondThresh = secondThresh,scale_rating = scale_rating,
+            wvec_index_maker=wvec,gpuNum=GPUnum)
     else:
         raise NotImplementedError(\
             'Only "word-only", "deppos", and "depposword" are supported dataset_type')
@@ -271,6 +281,11 @@ def train_recurrent_models(
             posidx=train_dataset.posidx,gpuNum=GPUnum,dropout=dropconnect)
     elif dataset_type == 'depposword':
         model = ttm.TreeLSTM(input_dim=16,hidden_dim=hidden_dim,
+            output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
+            posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum,
+            dropout=dropconnect)
+    elif dataset_type == 'depposwordprosody':
+        model = ttm.TreeLSTM_with_Prosody(input_dim=16,hidden_dim=hidden_dim,
             output_dim=len(train_dataset.ylabel),depidx=train_dataset.depidx,
             posidx=train_dataset.posidx,includewords=True,gpuNum=GPUnum,
             dropout=dropconnect)
