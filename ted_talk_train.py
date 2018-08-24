@@ -153,7 +153,7 @@ def train_model(model, feeder,
     model.save(open(model_filename,'wb'))
 
 def train_recurrent_models(
-    dataset_type = 'word-only',
+    dataset_type = 'depposwordprosody',
     firstThresh = 50.,
     secondThresh = 50.,
     scale_rating = True,
@@ -163,15 +163,16 @@ def train_recurrent_models(
     output_folder = 'TED_models/',
     train_test_ratio = 0.90,
     optimizer_fn = optim.Adam,
-    learning_rate = 0.0066,
-    weight_decay = 0.0033,
+    learning_rate = 0.001,
+    weight_decay = 0.00033,
     dropconnect = 0.2,
-    max_iter_over_dataset = 75,
+    max_iter_over_dataset = 48,
     GPUnum = 0):
     '''
     Trains the LSTM models using sequential datasets.
     
-    **Currently only 'word-only', 'deppos' and 'depposword' dataset is allowed.**
+    **Currently only 'word-only', 'deppos', 'depposword'
+    and 'depposwordprosody' dataset is allowed.**
     
     Output:
     1) A log file LSTM_log_ ... <random_number>.txt

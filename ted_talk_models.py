@@ -287,7 +287,7 @@ class TreeLSTM(nn.Module,ModelIO):
             outrating.append(rat_scores)
         return outrating
 
-class TreeLSTM_with_Prosody(nn.Module,ModelIO):
+class TreeLSTM_with_Prosody(TreeLSTM):
     '''
     A custom implementation of childsum TreeLSTM in pytorch. It is designed
     to feed dependency trees in the TED Talk Project. The input is formatted
@@ -300,101 +300,63 @@ class TreeLSTM_with_Prosody(nn.Module,ModelIO):
     https://cs.nyu.edu/~wanli/dropc/dropc.pdf
     '''
     def __init__(self,input_dim,hidden_dim,output_dim,depidx,posidx,
-        includewords=False,gpuNum=-1,dropout = 0.0):
-        super(TreeLSTM_with_Prosody,self).__init__()
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.depidx = depidx
-        self.posidx = posidx
-        self.includewords = includewords
-        self.gpuNum = gpuNum
-        self.h0, self.c0 = self.init_hidden()
-        # Learnable parameters
-        self.depembedding = nn.Embedding(len(depidx),int(np.ceil(input_dim/2.)))
-        self.posembedding = nn.Embedding(len(posidx),int(np.floor(input_dim/2.)))
-        if includewords:
-            input_dim = input_dim + 300
-        self.input_dim = input_dim
-        self.Wi = nn.Linear(input_dim,hidden_dim)
-        self.Wf = nn.Linear(input_dim,hidden_dim)
-        self.Wu = nn.Linear(input_dim,hidden_dim)
-        self.Wo = nn.Linear(input_dim,hidden_dim)        
-        self.Ui = nn.Linear(hidden_dim,hidden_dim)
-        self.Uf = nn.Linear(hidden_dim,hidden_dim)
-        self.Uu = nn.Linear(hidden_dim,hidden_dim)
-        self.Uo = nn.Linear(hidden_dim,hidden_dim)
-        self.linear_rat = nn.Linear(hidden_dim,output_dim)
-        self.dropout = dropout
-        self.dropconnect = nn.Dropout(self.dropout)        
-        # Set loss function
-        self.loss_fn = nn.BCEWithLogitsLoss
-        # GPUtizing itself is necessary for ModelIO
-        ttdf.gputize(self,self.gpuNum)        
-
-    def init_hidden(self):
-        nullvec = np.zeros((1,self.hidden_dim)).astype(np.float32)
-        return (ttdf.variablize(nullvec.copy(),self.gpuNum),
-                ttdf.variablize(nullvec.copy(),self.gpuNum))
-
-    def encodetree(self,atree):
-        # Loop over all the children
-        for ind,anode in enumerate(atree):
-            if type(anode) is tuple:
-                depvec = self.depembedding(anode[0])
-                posvec = self.posembedding(anode[1])                
-                if len(anode)==2:
-                    x = torch.cat((depvec,posvec)).view(1,-1)
-                else:
-                    x = torch.cat((depvec,posvec,anode[2])).view(1,-1)
-
-                # Look ahead if the next node is a subtree. If yes
-                # process it first
-                if ind < len(atree)-1 and type(atree[ind+1])==list:
-                    h_k,c_k = self.encodetree(atree[ind+1])
-                else:
-                    # For leaf node, child hidden value is the same
-                    # as the initial hidden value
-                    h_k,c_k = self.h0,self.c0                
-                # Child-wise forget gate
-                f_k = torch.sigmoid(self.Wf(x)+self.Uf(h_k))
-                if ind == 0:
-                    # first iteration
-                    h = h_k
-                    summed_c = f_k*c_k
-                    # Apply dropconnect
-                    if hasattr(self,'dropconnect'):
-                        self.Ui.load_state_dict({k:self.dropconnect(v) for k,v in self.Ui.state_dict().items()})
-                        self.Uf.load_state_dict({k:self.dropconnect(v) for k,v in self.Uf.state_dict().items()})
-                        self.Uu.load_state_dict({k:self.dropconnect(v) for k,v in self.Uu.state_dict().items()})
-                        self.Uo.load_state_dict({k:self.dropconnect(v) for k,v in self.Uo.state_dict().items()})
-                else:
-                    h = h + h_k
-                    summed_c = summed_c + f_k*c_k
-        # Now process the current node
-        # input gate
-        i = torch.sigmoid(self.Wi(x) + self.Ui(h))
-        # output gate
-        o = torch.sigmoid(self.Wo(x)+self.Uo(h))
-        # data
-        u = torch.tanh(self.Wu(x) + self.Uu(h))
-        c_k = i*u + summed_c
-        h_k = o * torch.tanh(c_k)
-        return h_k,c_k
+        includewords=False,prosody_input_dim = 8,conv_filter_nb=16,
+        filtersize=3,additional_dims = 0,gpuNum=-1,dropout = 0.0):
+        super(TreeLSTM_with_Prosody,self).__init__(input_dim,
+            hidden_dim,output_dim,depidx,posidx,
+            includewords,gpuNum,dropout)
+        self.prosody_input_dim = prosody_input_dim
+        self.conv_filter_nb = conv_filter_nb
+        self.filtersize = filtersize
+        self.additional_dims = additional_dims
+        self.conv_model = nn.Sequential(
+            nn.Conv1d(self.prosody_input_dim,self.conv_filter_nb,
+                self.filtersize),
+            nn.ReLU(),
+            nn.Conv1d(self.conv_filter_nb,self.conv_filter_nb,
+                self.filtersize),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(self.conv_filter_nb,2*self.conv_filter_nb,
+                self.filtersize),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Conv1d(2*self.conv_filter_nb,4*self.conv_filter_nb,
+                self.filtersize),
+            nn.ReLU()
+            )
+        total_dim = self.hidden_dim + 4*self.conv_filter_nb + additional_dims
+        self.prelinear_rat = nn.Linear(total_dim,total_dim)
+        self.linear_rat = nn.Linear(total_dim,self.output_dim)
+        ttdf.gputize(self,self.gpuNum)
 
     def forward(self,minibatch):
         outrating = []
-        for an_item in minibatch:
+        for i,an_item in enumerate(minibatch):
+            # Process the prosody
+            convolved_pros = self.conv_model(an_item['X_pros'])
+            sig_len = convolved_pros.shape[-1]
+            last_maxpool = nn.MaxPool1d(sig_len)
+            X_pros = last_maxpool(convolved_pros)
+
             # Feed each tree through TreeLSTM
-            outsum = self.h0
             count = 0.
-            for atree in an_item['X']:
+            for j,atree in enumerate(an_item['X']):
                 h,c = self.encodetree(atree)
+                h=torch.cat((h,X_pros[0,:,:].t()),dim=1)
                 # Accumulate vectors per sentence
-                outsum = outsum + h
+                if j == 0:
+                    outsum = h
+                else:
+                    outsum = outsum + h
                 count = count + 1.
             # Bag-of-Sentences Model
             h = outsum/count
-            # Pass the output through feed-forward
+            # Pass through the first feed-forward
+            h = self.prelinear_rat(h)
+            # Pass through dropout
+            h = self.dropconnect(h)
+            # Pass through the second feed-forward
             rat_scores = self.linear_rat(h).view(-1,1)
             outrating.append(rat_scores)
         return outrating

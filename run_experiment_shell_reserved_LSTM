@@ -10,7 +10,7 @@
 
 module load anaconda
 
-python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_run_in_Bluehive()"
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_run_in_Bluehive()"
 #python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_1_run_in_Bluehive()"
 #python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_2_run_in_Bluehive()"
 #python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_3_run_in_Bluehive()"
@@ -19,3 +19,6 @@ python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_run_in_
 #python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp4_2_run_in_Bluehive()"
 
 			       
+python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp10_run_in_Bluehive()"
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp11_run_in_Bluehive()"
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp12_run_in_Bluehive()"

@@ -7,7 +7,6 @@ import threading
 import cPickle as cp
 import numpy as np
 import scipy as sp
-from scipy.signal import resample
 from functools import partial
 import multiprocessing as mp
 from itertools import izip_longest
@@ -941,15 +940,13 @@ def __read_ooTextFile__(filename):
             i+=1
         return {'rate':rate,'N':N,'samples':np.array(samples,dtype=np.float32).T}
 
-def read_raw_prosody_per_sentence(atalk,interp_len=50,gpuNum=-1):
+def read_raw_prosody_per_sentence(atalk,num_sentences,gpuNum=-1):
     '''
     Returns interpolated nonverbal features within the
     boundaries of each sentence in the transcript. The signals
-    are interpolated and z-score normalized.
-    The original time lengths of the sentences are also returned.
+    are padded (to the longest sentence) and z-score normalized.
     The mean and std of the signals are also returned.
     '''
-    dir_boun = os.path.join(ted_data_path,'TED_feature_word_boundary')
     pitch = __read_ooTextFile__(str(atalk)+'.pitch')
     form = __read_ooTextFile__(str(atalk)+'.formant')
     loud = __read_ooTextFile__(str(atalk)+'.loud')
@@ -958,33 +955,46 @@ def read_raw_prosody_per_sentence(atalk,interp_len=50,gpuNum=-1):
 
     prosody = np.concatenate((pitch['samples'][:,:min_len],\
         loud['samples'][:,:min_len],form['samples'][:,:min_len]),axis=0)
+    M,N = prosody.shape
+
+    # Standardize ignoring the zero values
     prosody[prosody==0.]=np.nan
     mean_pros = np.nanmean(prosody,axis=1)[None].T
     std_pros = np.nanstd(prosody,axis=1)[None].T
     prosody = (prosody - mean_pros)/std_pros
     np.nan_to_num(prosody,False)
 
-    data_boun = cp.load(open(os.path.join(dir_boun,str(atalk)+'.pkl')))
     sent_bounds = get_sent_boundary(atalk)
 
-    prosody_per_sent = {}
-    for sentid in sent_bounds:
-        st = sent_bounds[sentid][0]
-        en = sent_bounds[sentid][1]
-        if en<st:
-            continue
+    all_chunks = []
+    longest = 0
+    # Segment the prosody into chunks per sentence
+    for sentid in range(num_sentences):
+        st = 0
+        en = -1
+        if sentid in sent_bounds:    
+            st = sent_bounds[sentid][0]
+            en = sent_bounds[sentid][1]
         l = max(0,int(st*pitch['rate']))
-        r = min(int(en*pitch['rate']),np.size(prosody,axis=1))
-        chunk = prosody[:,l:r]
-        if np.size(chunk,axis=1)==0:
-            continue
-        chunk_interp = resample(chunk,interp_len,axis=1)
-
-        chunk_interp = variablize(chunk_interp,gpuNum)
-        sent_len = torch.tensor([en-st],dtype=chunk_interp.dtype,\
-            device=chunk_interp.device)
-        prosody_per_sent[sentid] = (chunk_interp,sent_len)
-    return prosody_per_sent, variablize(mean_pros,gpuNum), \
+        r = min(int(en*pitch['rate']),N)
+        if r<=l:
+            # Just take zeros if no prosody corresponding
+            # to the sentence is found
+            chunk = np.zeros((M,1),dtype=prosody.dtype)
+        else:
+            chunk = prosody[:,l:r]
+            
+        longest = max(longest,np.size(chunk,axis=1))
+        all_chunks.append(chunk)
+    
+    # Pad the chunks to the size of the longest one
+    for i,a_chunk in enumerate(all_chunks):
+        to_pad = longest - np.size(a_chunk,axis=1)
+        chunk_padded = np.pad(a_chunk,((0,0),(0,to_pad)),
+            'constant',constant_values=0)
+        all_chunks[i] = variablize(chunk_padded,gpuNum).view(1,M,-1)
+    all_chunks = torch.cat(all_chunks)
+    return all_chunks, variablize(mean_pros,gpuNum), \
         variablize(std_pros,gpuNum)
 
 class TED_Rating_depPOSnorverbal_Dataset(TED_Rating_depPOSonly_indices_Dataset):
@@ -999,10 +1009,13 @@ class TED_Rating_depPOSnorverbal_Dataset(TED_Rating_depPOSonly_indices_Dataset):
         Given a data index (not videoid), get the corresponding data
         '''
         talkid = self.data_indices[idx]
+        
         deptrees = get_dep_rating(talkid,process_ratings=False)
         coded_dtrees = map(self.__convert_atree__,deptrees)
+        num_sentences = len(coded_dtrees)
+
         prosody_per_sent,mean_,std_ = read_raw_prosody_per_sentence(talkid,\
-            gpuNum=self.gpunum)
+            num_sentences,gpuNum=self.gpunum)
         # Process the labels
         yval = variablize(np.reshape([1 if alab == 1 else 0 for alab in \
             self.Y[talkid]],(-1,1)).astype(np.float32),self.gpunum)
@@ -1230,9 +1243,7 @@ def get_sent_boundary(atalk,computeAll=False):
         data_meta['word_2_time_map']=word_2_time_map
         data_meta['sent_2_time_map']=sent_2_time_map
         cp.dump(data_meta,open(file_meta,'wb'))
-
     return data_meta['sent_2_time_map']
-
 
 def align_fave_transcript_to_word_boundary(atalk):
     '''
@@ -1271,6 +1282,7 @@ def align_fave_transcript_to_word_boundary(atalk):
     m = len(data_meta['dep_2_fave'])
     buffer = 5
     for i in range(m):
+
         # Pick each sentence from the fave_style_transcript, make a combined list of
         # the words (wordlist_meta_sent) and a map that points to the indices of the
         # words for each sentence
@@ -1285,7 +1297,7 @@ def align_fave_transcript_to_word_boundary(atalk):
         sent2wordmap[i]=(wordcount,wordcount+len(temp_wordlist))
         wordcount = len(wordlist_meta_sent)
         # Align words from fave_style_transcript with the list of words from 
-        # TED_feature_word_boundary (wordlist_bound_sent)
+        # TED_feature_word_boundary (wordlist_bound_sent)            
         upto = min(frm+len(temp_wordlist)+buffer,len(wordlist_bound_sent))
         buffer = 5
         if frm==upto:
@@ -1364,10 +1376,4 @@ def main():
     print 'Preparing Storytelling features'
     import ted_talk_classical_experiments as ttce
     X,_,_,comp = ttce.__loaddata__()
-    ttce.evaluate_clusters_pretty()
-    print 'Preparing Lexical Features'
-    lex.prepare_lexical_feat()
-
-if __name__=='__main__':
-    main()
-
+    ttce.evaluate_clu
