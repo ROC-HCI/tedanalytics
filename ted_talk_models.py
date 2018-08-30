@@ -68,6 +68,11 @@ def load_model(modelfilename,modelclassname,map_location=None):
         # Load actual model data from file
         model.load(open(modelfilename),map_location)
         return model
+    elif modelclassname=='TreeLSTM_with_Prosody':
+        model = TreeLSTM_with_Prosody(2,2,2,{},{},includewords=False)
+        # Load actual model data from file
+        model.load(open(modelfilename),map_location)
+        return model
     else:
         raise NotImplementedError
 

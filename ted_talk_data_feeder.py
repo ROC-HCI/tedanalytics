@@ -776,7 +776,7 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
             secondThresh=50.,scale_rating=True,flatten_sentence=False,
             access_hidden_test=False,wvec_index_maker=None,gpuNum=-1):
-        self.gpunum = gpuNum
+        self.gpunum = gpuNum        
         # get ratings
         self.Y,self.ylabel = binarized_ratings(firstThresh,\
             secondThresh,scale_rating,read_hidden_test_set=access_hidden_test)

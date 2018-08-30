@@ -130,7 +130,7 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
     a single csv file.
     '''
     filenames = glob.glob(os.path.join(ted_data_path,'TED_stats/',\
-        prefix+'*.pkl'))
+        prefix+'*.pkl'))    
     m = len(filenames)
     outfilename_table = os.path.join(ted_data_path,'TED_stats/',outfile)
 
@@ -141,6 +141,8 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
     new_ratings = set(['average_accuracy','average_auc'])
     for i,afile in enumerate(filenames):
         print afile
+        filepart = os.path.split(afile)[-1]
+        dev_test_part = filepart.split('_')[2]
         data = cp.load(open(afile))
         all_accuracy=[]
         all_auc=[]
@@ -157,11 +159,12 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
                     alldata.setdefault(k,{}).update({i:v})
             else:
                 alldata.setdefault(akey,{}).update({i:data[akey]})
+        alldata.setdefault('Dev_or_Test',{}).update({i:dev_test_part})
         alldata.setdefault('average_accuracy',{}).update({i:np.mean(all_accuracy)})
         alldata.setdefault('average_auc',{}).update({i:np.mean(all_auc)})
 
     log_info = [h for h in alldata.keys() if not h in new_ratings]
-    headers = log_info+sorted(list(new_ratings))
+    headers = log_info+['Dev_or_Test']+sorted(list(new_ratings))
     with open(outfilename_table,'wb') as fout:
         writer = csv.DictWriter(fout,headers)
         writer.writeheader()

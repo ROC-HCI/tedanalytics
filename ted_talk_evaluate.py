@@ -165,7 +165,18 @@ def get_results(logdata,model,test_indices):
             flatten_sentence=False,
             access_hidden_test=list_of_talks.test_set==test_indices,
             wvec_index_maker=wvec,
-            gpuNum=model.gpuNum)        
+            gpuNum=model.gpuNum)
+    elif logdata['dataset_type'] == 'depposwordprosody':
+        wvec = ttdf.wvec_index_maker(model.gpuNum)
+        test_dataset = ttdf.TED_Rating_depPOSnorverbal_Dataset(
+            data_indices = test_indices,
+            firstThresh = logdata['firstThresh'],
+            secondThresh = logdata['secondThresh'],
+            scale_rating = bool(logdata['scale_rating']),
+            flatten_sentence=False,
+            access_hidden_test=list_of_talks.test_set==test_indices,
+            wvec_index_maker=wvec,
+            gpuNum=model.gpuNum)
     else:
         raise NotImplementedError(
         'Only "word-only", "deppos", and "depposword" are supported')
