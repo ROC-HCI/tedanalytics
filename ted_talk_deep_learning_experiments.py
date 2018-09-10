@@ -396,9 +396,9 @@ def exp13_run_in_Bluehive():
         train_test_ratio = 0.90,
         optimizer_fn = optim.Adagrad,
         learning_rate = 0.01,
-        weight_decay = 0.00033,
+        weight_decay = 0.0001,
         dropconnect=0.2,
-        max_iter_over_dataset = 48,
+        max_iter_over_dataset = 70,
         GPUnum = -1) 
 
 def exp14_run_in_Bluehive():

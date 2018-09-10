@@ -122,7 +122,7 @@ def read_lstm_log(afile,averageonly=True):
                     linedat['iter_time'],linedat['Loss']])
     return logdata
 
-def tabulate_lstm_results_pkl(prefix='LSTM_results',\
+def tabulate_lstm_results_pkl(prefix='Backup_results/LSTM_results',\
     outfile='deep_learning_results.csv',ignoredfields = \
     {'train','test','train_indices','test_indices','modality','order','dropout'}):
     '''
@@ -138,7 +138,7 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
     average_accuracy={}
     average_auc = {}
     ratings = set(rating_labels)
-    new_ratings = set(['average_accuracy','average_auc'])
+    new_ratings = set(['average_accuracy','average_auc','average_precision','average_recall','average_fscore'])
     for i,afile in enumerate(filenames):
         print afile
         filepart = os.path.split(afile)[-1]
@@ -146,14 +146,21 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
         data = cp.load(open(afile))
         all_accuracy=[]
         all_auc=[]
+        all_fscore=[]
+        all_precision=[]
+        all_recall=[]
         for akey in data:
             if akey.lower() in ignoredfields:
                 continue
             if akey in ratings:
                 newkeys = [akey+'_'+anorder for anorder in data['order']]
                 newvals = data[akey]
-                all_accuracy.append(data[akey][-2])
-                all_auc.append(data[akey][-1])
+                all_precision.append(data[akey][0])
+                all_recall.append(data[akey][1])
+                all_fscore.append(data[akey][2])
+                all_accuracy.append(data[akey][3])
+                all_auc.append(data[akey][4])
+
                 for k,v in zip(newkeys,newvals):
                     new_ratings.add(k)
                     alldata.setdefault(k,{}).update({i:v})
@@ -162,6 +169,9 @@ def tabulate_lstm_results_pkl(prefix='LSTM_results',\
         alldata.setdefault('Dev_or_Test',{}).update({i:dev_test_part})
         alldata.setdefault('average_accuracy',{}).update({i:np.mean(all_accuracy)})
         alldata.setdefault('average_auc',{}).update({i:np.mean(all_auc)})
+        alldata.setdefault('average_precision',{}).update({i:np.mean(all_precision)})
+        alldata.setdefault('average_recall',{}).update({i:np.mean(all_recall)})        
+        alldata.setdefault('average_fscore',{}).update({i:np.mean(all_fscore)})
 
     log_info = [h for h in alldata.keys() if not h in new_ratings]
     headers = log_info+['Dev_or_Test']+sorted(list(new_ratings))
@@ -187,7 +197,8 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     outfile='summary_plot_LSTM_log.pdf',ignoredfields = \
     ['train','test','train_indices','test_indices',\
     'model_outfile','gpunum','modality'],\
-    markers = ['','.','+','|','x','*','_','^','v','<','s','>','o']):
+    markers = ['x','*','+','|','','.','_','^','v','<','s','>','o'],
+    figuresize=(15, 8)):
     '''
     Summarize all the LSTM training logs with a single figure
     '''
@@ -233,7 +244,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
         legendtxts.append(alegend)
 
     # Draw iter time vs loss plot
-    fig=plt.figure(0,figsize=(15, 8))
+    fig=plt.figure(0,figsize=figuresize)
     plt.clf()
     for i,alegend in zip(range(len(filenames)),legendtxts):
         trainloss = np.array(alldata['train'][i])        
@@ -257,7 +268,7 @@ def summarize_lstm_log(prefix='LSTM_log',averageonly=True,\
     plt.close()
 
     # draw iter vs loss plot
-    fig=plt.figure(0,figsize=(15, 8))
+    fig=plt.figure(0,figsize=figuresize)
     plt.clf()
     for i,alegend in zip(range(len(filenames)),legendtxts):
         # draw plots
@@ -442,3 +453,4 @@ def tabulate_classical_results(outfile='result_classical.csv'):
             arow.update({arating+'_'+lab:data[arating][i] for arating in rating_names \
                     for i,lab in enumerate(rating_order)})
             writer.writerow(arow)
+    print outfilename

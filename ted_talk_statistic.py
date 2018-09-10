@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from list_of_talks import all_valid_talks
 from TED_data_location import ted_data_path
 
+
 def plot_statistics(infolder,outfolder):
     alltalks = [str(afile)+'.pkl' for afile in all_valid_talks]
     tottalks = len(alltalks)
@@ -69,15 +70,16 @@ def plot_statistics(infolder,outfolder):
     plt.hist(lenlst,bins=50)
     plt.xlabel('Duration of the Talks (Minutes)')
     plt.ylabel('Number of Talks')
-    plt.savefig(outfolder+'duration_hist.eps')
+    plt.savefig(outfolder+'duration_hist.pdf')
 
     # Plot viewcount distribution
     plt.figure(2)
     y,x = np.histogram(viewlst,bins=50)
-    plt.loglog(x,y)
+    minlen = min(len(x),len(y))
+    plt.loglog(x[:minlen],y[:minlen])
     plt.xlabel('View Count')
     plt.ylabel('Number of Talks')
-    plt.savefig(outfolder+'viewcount_hist.eps')
+    plt.savefig(outfolder+'viewcount_hist.pdf')
 
     # Plot number of talks with some specific ratings as maximum
     plt.figure(3)
@@ -86,17 +88,20 @@ def plot_statistics(infolder,outfolder):
     plt.xlabel('Ratings')
     plt.ylabel('Number of talks with the highest rating')
     plt.tight_layout()
-    plt.savefig(outfolder+'toprating_count.eps')
+    plt.savefig(outfolder+'toprating_count.pdf')
 
     # Plot the total number of talks with some specific ratings
     plt.figure(4)
-    totalrat = {key:sum(vals) for key,vals in ratinglst.items()}
-    plt.bar(range(len(totalrat.keys())),totalrat.values())
-    plt.xticks(range(len(totalrat.keys())), totalrat.keys(),rotation=70)
+    sortedkeys = sorted(ratinglst)
+    totalrat = [sum(ratinglst[key]) for key in sortedkeys]
+    for i,akey in enumerate(sortedkeys):
+        print akey,totalrat[i]
+    plt.bar(range(len(sortedkeys)),totalrat)
+    plt.xticks(range(len(sortedkeys)), sortedkeys,rotation=70)
     plt.xlabel('Ratings')
     plt.ylabel('Count of the ratings in all talks')
     plt.tight_layout()
-    plt.savefig(outfolder+'totalrating_barplot.eps')
+    plt.savefig(outfolder+'totalrating_barplot.pdf')
 
     # Plot number of individual ratings
     for i,akey in enumerate(ratinglst):
@@ -106,7 +111,7 @@ def plot_statistics(infolder,outfolder):
         plt.ylabel('Number of talks falling in a specific bin')
         plt.title('Histogram for the rating: '+akey)
         plt.tight_layout()
-        plt.savefig(outfolder+'ratings_hist_'+akey+'.eps')
+        plt.savefig(outfolder+'ratings_hist_'+akey+'.pdf')
 
 if __name__=='__main__':
     infolder = os.path.join(ted_data_path,'TED_meta/')

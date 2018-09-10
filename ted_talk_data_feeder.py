@@ -83,6 +83,18 @@ def get_dep_rating(talk_id,scale_rating=True,process_ratings=True):
     else:
         return alldat
 
+def rating_ratio():
+    binrats,labels = binarized_ratings()
+    count=[]
+    for i,avalidtalk in enumerate(binrats):
+        if i==0:
+            count = [1 if x==1. else 0 for x in binrats[avalidtalk]]
+        count = [x+1 if y==1. else x for x,y in zip(count,binrats[avalidtalk])]
+        print count
+    count = [arat/float(len(binrats)) for arat in count]
+    return {l:val for l,val in zip(labels,count)}
+
+
 def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
     read_hidden_test_set=False):
     '''
