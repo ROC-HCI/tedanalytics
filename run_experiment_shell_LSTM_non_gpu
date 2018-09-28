@@ -1,0 +1,26 @@
+#!/bin/sh
+#SBATCH -p standard
+#SBATCH --mem=30gb
+#SBATCH -c 1
+#SBATCH -t 5-00:00:00
+#SBATCH -J tanv_eval
+#SBATCH -o /scratch/mtanveer/output/eval_output%j
+#SBATCH -e /scratch/mtanveer/output/eval_error%j
+
+module load anaconda
+
+
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp13_run_in_Bluehive()"
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp14_run_in_Bluehive()"
+#python -c "import ted_talk_deep_learning_experiments as ttdle;ttdle.exp15_run_in_Bluehive()"
+
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.116769962707.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.202999727235.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.239554409108.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.320358253559.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.355918709736.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.391448444142.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.607940916986.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.658667661119.txt',max_iter_over_dataset=70)"
+#python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.809367284201.txt',max_iter_over_dataset=70)"
+python -c "import ted_talk_train as ttt;ttt.resume_recurrent_training('/scratch/mtanveer/TED_models/LSTM_log_typdepposwordprosody_sTrue_50.0_50.0_hid128_it70_tr2007_bat10_0.826881555301.txt',max_iter_over_dataset=70)"
