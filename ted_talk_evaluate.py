@@ -269,3 +269,6 @@ def __classifier_eval__(y_gt,y_test,y_test_score,col_labels,\
             plt.close()
     results['order']=['avg_precision','avg_recall','avg_fscore','accuracy','auc']
     return results
+
+if __name__=='__main__':
+    __evaluate_all_models__()
