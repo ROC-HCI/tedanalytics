@@ -531,157 +531,157 @@ def get_minibatch_iter_pooled(dataset,minibatch_size,gpuNum,
 
     return datasetlist
 
+###################### Deprecated #############################
+# class TED_Rating_Averaged_Dataset(Dataset):
+#     """
+#     TED rating dataset. The pose and face values are averaged.
+#     Note: Input Semantics for LSTM
+#     The first axis is the sequence itself (T), the second indexes
+#     instances in the mini-batch (B), and the third indexes elements
+#     of the input (*).
+#     TODO: 
+#     1. Utilize wvec_index_maker
+#     2. Wordwise prosody
+#     3. Sentence-wise Face and Pose
+#     4. Preload into the GPU
+#     """
 
-class TED_Rating_Averaged_Dataset(Dataset):
-    """
-    TED rating dataset. The pose and face values are averaged.
-    Note: Input Semantics for LSTM
-    The first axis is the sequence itself (T), the second indexes
-    instances in the mini-batch (B), and the third indexes elements
-    of the input (*).
-    TODO: 
-    1. Utilize wvec_index_maker
-    2. Wordwise prosody
-    3. Sentence-wise Face and Pose
-    4. Preload into the GPU
-    """
-
-    def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
-            secondThresh=50.,scale_rating=True,posedim=36,prosodydim=49,\
-            facedim=44,worddim=300,modality=['word','pose','face','audio'],\
-            flatten_sentence=False,access_hidden_test=False,gpuNum=-1):
-        self.gpunum = gpuNum
-        # get ratings
-        self.Y,self.ylabel = binarized_ratings(firstThresh,\
-            secondThresh,scale_rating)
-        # Indices of the data in the dataset
-        self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
-        ################ DEBUG * REMOVE ###############
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        #self.data_indices = self.data_indices[:10]
-        #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
-        ###############################################
+#     def __init__(self, data_indices=lst_talks.all_valid_talks,firstThresh=50.,\
+#             secondThresh=50.,scale_rating=True,posedim=36,prosodydim=49,\
+#             facedim=44,worddim=300,modality=['word','pose','face','audio'],\
+#             flatten_sentence=False,access_hidden_test=False,gpuNum=-1):
+#         self.gpunum = gpuNum
+#         # get ratings
+#         self.Y,self.ylabel = binarized_ratings(firstThresh,\
+#             secondThresh,scale_rating)
+#         # Indices of the data in the dataset
+#         self.data_indices = list(set(data_indices).intersection(self.Y.keys()))
+#         ################ DEBUG * REMOVE ###############
+#         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#         #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+#         #self.data_indices = self.data_indices[:10]
+#         #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#         #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+#         ###############################################
         
-        # Other important information for the dataset
-        print 'reading word vectors'
-        # Reading the complete w2v dictionary
-        self.wvec = read_crop_glove()
-        print 'reading ratings'
-        self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
-        self.posepath = os.path.join(ted_data_path,\
-            'TED_feature_openpose/openpose_sentencewise_features/')
-        self.facepath = os.path.join(ted_data_path,\
-            'TED_feature_openface/openface_sentencewise_features/')
-        self.sentpath = os.path.join(ted_data_path,\
-            'TED_feature_sentence_boundary/')
-        self.prospath = os.path.join(ted_data_path,\
-            'TED_feature_prosody/per_sentence')
-        self.modality = modality
-        self.posedim = posedim
-        self.prosdim = prosodydim
-        self.facedim = facedim
-        self.worddim = worddim
+#         # Other important information for the dataset
+#         print 'reading word vectors'
+#         # Reading the complete w2v dictionary
+#         self.wvec = read_crop_glove()
+#         print 'reading ratings'
+#         self.ratings = {akey:self.Y[akey] for akey in self.data_indices}
+#         self.posepath = os.path.join(ted_data_path,\
+#             'TED_feature_openpose/openpose_sentencewise_features/')
+#         self.facepath = os.path.join(ted_data_path,\
+#             'TED_feature_openface/openface_sentencewise_features/')
+#         self.sentpath = os.path.join(ted_data_path,\
+#             'TED_feature_sentence_boundary/')
+#         self.prospath = os.path.join(ted_data_path,\
+#             'TED_feature_prosody/per_sentence')
+#         self.modality = modality
+#         self.posedim = posedim
+#         self.prosdim = prosodydim
+#         self.facedim = facedim
+#         self.worddim = worddim
 
-        self.dims = 0
-        if 'pose' in self.modality:
-            self.dims += posedim
-        if 'face' in self.modality:
-            self.dims += facedim
-        if 'word' in self.modality:
-            self.dims += worddim
-        if 'audio' in self.modality:
-            self.dims += prosodydim
+#         self.dims = 0
+#         if 'pose' in self.modality:
+#             self.dims += posedim
+#         if 'face' in self.modality:
+#             self.dims += facedim
+#         if 'word' in self.modality:
+#             self.dims += worddim
+#         if 'audio' in self.modality:
+#             self.dims += prosodydim
 
-        # Final check for the existence of all the files.
-        all_available = set()
-        print 'Checking indices'
-        for atalk in self.data_indices:
-            posefile = os.path.join(self.posepath,str(atalk)+'.pkl')
-            facefile = os.path.join(self.facepath,str(atalk)+'.pkl')
-            sentfile = os.path.join(self.sentpath,str(atalk)+'.pkl')
-            prosfile = os.path.join(self.prospath,str(atalk)+'.pkl')
-            if os.path.exists(posefile) and os.path.exists(facefile) \
-                and os.path.exists(sentfile) and os.path.exists(prosfile):
-                all_available.add(atalk)
-        # Remove indices that are not all available
-        self.data_indices = list(all_available.intersection(self.data_indices))
-        print 'Dataset Ready'
+#         # Final check for the existence of all the files.
+#         all_available = set()
+#         print 'Checking indices'
+#         for atalk in self.data_indices:
+#             posefile = os.path.join(self.posepath,str(atalk)+'.pkl')
+#             facefile = os.path.join(self.facepath,str(atalk)+'.pkl')
+#             sentfile = os.path.join(self.sentpath,str(atalk)+'.pkl')
+#             prosfile = os.path.join(self.prospath,str(atalk)+'.pkl')
+#             if os.path.exists(posefile) and os.path.exists(facefile) \
+#                 and os.path.exists(sentfile) and os.path.exists(prosfile):
+#                 all_available.add(atalk)
+#         # Remove indices that are not all available
+#         self.data_indices = list(all_available.intersection(self.data_indices))
+#         print 'Dataset Ready'
 
         
-    def __len__(self):
-        return len(self.data_indices)
+#     def __len__(self):
+#         return len(self.data_indices)
 
-    def __getitem__(self, idx):
-        '''
-        Given a data index (not videoid), get the corresponding data
-        '''
-        talkid = self.data_indices[idx]
-        posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
-        facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
-        facedat = facedat[0]
-        sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
-        sentdat = sentdat['sentences']
-        prosdat,_ = read_prosody_per_sentence(talkid)
+#     def __getitem__(self, idx):
+#         '''
+#         Given a data index (not videoid), get the corresponding data
+#         '''
+#         talkid = self.data_indices[idx]
+#         posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
+#         facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
+#         facedat = facedat[0]
+#         sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
+#         sentdat = sentdat['sentences']
+#         prosdat,_ = read_prosody_per_sentence(talkid)
 
-        outvec=[]
-        # Second best candidate for data parallelization. CPU multithreading
-        for asent,aface,apose,apros in izip_longest(sentdat,facedat,\
-                posedat,prosdat,fillvalue=[]):
-            # Average pose per sentence
-            if 'pose' in self.modality:
-                if not apose:
-                    apose = np.zeros(self.posedim)
-                else:
-                    assert self.posedim == np.size(apose,axis=1)
-                    apose = np.nanmean(np.nan_to_num(apose),axis=0)
-            # Average face per sentence
-            if 'face' in self.modality:
-                if not aface:
-                    aface = np.zeros(self.facedim)
-                else:
-                    assert self.facedim == np.size(aface,axis=1)
-                    aface = np.nanmean(np.nan_to_num(aface),axis=0)
-            # Average, std, skew, kartosys of prosody per sentence
-            if 'audio' in self.modality:
-                if not apros:
-                    apros = np.zeros(self.prosdim)
-                else:
-                    apros = np.nan_to_num(apros)
+#         outvec=[]
+#         # Second best candidate for data parallelization. CPU multithreading
+#         for asent,aface,apose,apros in izip_longest(sentdat,facedat,\
+#                 posedat,prosdat,fillvalue=[]):
+#             # Average pose per sentence
+#             if 'pose' in self.modality:
+#                 if not apose:
+#                     apose = np.zeros(self.posedim)
+#                 else:
+#                     assert self.posedim == np.size(apose,axis=1)
+#                     apose = np.nanmean(np.nan_to_num(apose),axis=0)
+#             # Average face per sentence
+#             if 'face' in self.modality:
+#                 if not aface:
+#                     aface = np.zeros(self.facedim)
+#                 else:
+#                     assert self.facedim == np.size(aface,axis=1)
+#                     aface = np.nanmean(np.nan_to_num(aface),axis=0)
+#             # Average, std, skew, kartosys of prosody per sentence
+#             if 'audio' in self.modality:
+#                 if not apros:
+#                     apros = np.zeros(self.prosdim)
+#                 else:
+#                     apros = np.nan_to_num(apros)
 
-            # Concatenate pose and face and prosody
-            if 'pose' in self.modality and 'face' in self.modality:
-                nonverbal = np.concatenate((apose,aface,apros)).tolist()
-            elif 'pose' in self.modality:
-                nonverbal = apose
-            elif 'face' in self.modality:
-                nonverbal = aface
-            elif 'audio' in self.modality:
-                nonverbal = apros
-            else:
-                nonverbal = []
+#             # Concatenate pose and face and prosody
+#             if 'pose' in self.modality and 'face' in self.modality:
+#                 nonverbal = np.concatenate((apose,aface,apros)).tolist()
+#             elif 'pose' in self.modality:
+#                 nonverbal = apose
+#             elif 'face' in self.modality:
+#                 nonverbal = aface
+#             elif 'audio' in self.modality:
+#                 nonverbal = apros
+#             else:
+#                 nonverbal = []
 
-            # Take all words in a sentence
-            if 'word' in self.modality:
-                allwords=[]
-                nullvec = [0 for i in range(self.worddim)]
-                for aword in word_tokenize(asent['sentence']):
-                    if aword in self.wvec:
-                        allwords.append(self.wvec[aword]+nonverbal)
-                    else:
-                        allwords.append(nullvec+nonverbal)
-                outvec.extend(allwords)
-            else:
-                outvec.extend([nonverbal])
-        # Note: This is T x * (not T x B (batch = 1) x *
-        # Because the collate function needs in this form for
-        # pad_sequence
-        xval = np.array(outvec).astype(np.float32)
+#             # Take all words in a sentence
+#             if 'word' in self.modality:
+#                 allwords=[]
+#                 nullvec = [0 for i in range(self.worddim)]
+#                 for aword in word_tokenize(asent['sentence']):
+#                     if aword in self.wvec:
+#                         allwords.append(self.wvec[aword]+nonverbal)
+#                     else:
+#                         allwords.append(nullvec+nonverbal)
+#                 outvec.extend(allwords)
+#             else:
+#                 outvec.extend([nonverbal])
+#         # Note: This is T x * (not T x B (batch = 1) x *
+#         # Because the collate function needs in this form for
+#         # pad_sequence
+#         xval = np.array(outvec).astype(np.float32)
 
-        yval = np.reshape([1 if alab == 1 else 0 for alab in \
-            self.Y[talkid]],(1,-1)).astype(np.int64)
-        return {'X':xval,'Y':yval,'ylabel':self.ylabel}
+#         yval = np.reshape([1 if alab == 1 else 0 for alab in \
+#             self.Y[talkid]],(1,-1)).astype(np.int64)
+#         return {'X':xval,'Y':yval,'ylabel':self.ylabel}
 
 def collate_and_pack_simple(datalist,gpuNum):
     '''
@@ -1090,70 +1090,71 @@ class wvec_index_maker():
                 allidx.append(-1)
         return variablize(np.array(allidx).astype(np.int64),self.gpunum)
 
-class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
-    """
-    TED rating dataset. The word, pose and face values are
-    sent as three different streams.
+########################### Deprecated #########################################
+# class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
+#     """
+#     TED rating dataset. The word, pose and face values are
+#     sent as three different streams.
     
-    Note: Input Semantics for LSTM
-    The first axis is the sequence itself (T), the second indexes
-    instances in the mini-batch (B), and the third indexes elements
-    of the input (*).
+#     Note: Input Semantics for LSTM
+#     The first axis is the sequence itself (T), the second indexes
+#     instances in the mini-batch (B), and the third indexes elements
+#     of the input (*).
 
-    TODO: Utilize wvec_index_maker
-    """
-    def __getitem__(self, idx):
-        '''
-        Given a data index (not videoid), get the corresponding data
-        '''
-        talkid = self.data_indices[idx]
-        posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
-        facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
-        facedat = facedat[0]
-        sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
-        sentdat = sentdat['sentences']
+#     TODO: Utilize wvec_index_maker
+#     """
+#     def __getitem__(self, idx):
+#         '''
+#         Given a data index (not videoid), get the corresponding data
+#         '''
+#         talkid = self.data_indices[idx]
+#         posedat = cp.load(open(os.path.join(self.posepath,str(talkid)+'.pkl')))
+#         facedat = cp.load(open(os.path.join(self.facepath,str(talkid)+'.pkl')))
+#         facedat = facedat[0]
+#         sentdat = cp.load(open(os.path.join(self.sentpath,str(talkid)+'.pkl')))
+#         sentdat = sentdat['sentences']
 
-        pose_stream=[]
-        face_stream=[]
-        wrd_stream=[]
-        nullwvec = [0 for i in range(self.worddim)]
-        nullpvec = [[0 for i in range(self.posedim)]]
-        nullfvec = [[0 for i in range(self.facedim)]]
-        retval = {}
+#         pose_stream=[]
+#         face_stream=[]
+#         wrd_stream=[]
+#         nullwvec = [0 for i in range(self.worddim)]
+#         nullpvec = [[0 for i in range(self.posedim)]]
+#         nullfvec = [[0 for i in range(self.facedim)]]
+#         retval = {}
 
-        for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
-                fillvalue=[]):
-            # Pose
-            if not apose:
-                pose_stream.extend(nullpvec)
-            else:
-                pose_stream.extend(np.nan_to_num(apose).tolist())
-            # Face
-            if not aface:
-                face_stream.extend(nullfvec)
-            else:
-                face_stream.extend(np.nan_to_num(aface).tolist())
-            # word
-            allwords=[]
-            for aword in word_tokenize(asent['sentence']):
-                if aword in self.wvec:
-                    allwords.append(self.wvec[aword])
-                else:
-                    allwords.append(nullwvec)
-            wrd_stream.extend(allwords)
-        # Selectively add modalities
-        if 'pose' in self.modality:
-            retval['pose'] = np.array(pose_stream).astype(np.float32)
-        if 'face' in self.modality:
-            retval['face'] = np.array(face_stream).astype(np.float32)
-        if 'word' in self.modality:
-            retval['word'] = np.array(wrd_stream).astype(np.float32)
-        # Target
-        retval['Y'] = yval = np.reshape([1 if alab == 1 else 0 \
-            for alab in self.Y[talkid]],(1,-1)).astype(np.int64)
-        retval['ylabel'] = self.ylabel
+#         for asent,aface,apose in izip_longest(sentdat,facedat,posedat,\
+#                 fillvalue=[]):
+#             # Pose
+#             if not apose:
+#                 pose_stream.extend(nullpvec)
+#             else:
+#                 pose_stream.extend(np.nan_to_num(apose).tolist())
+#             # Face
+#             if not aface:
+#                 face_stream.extend(nullfvec)
+#             else:
+#                 face_stream.extend(np.nan_to_num(aface).tolist())
+#             # word
+#             allwords=[]
+#             for aword in word_tokenize(asent['sentence']):
+#                 if aword in self.wvec:
+#                     allwords.append(self.wvec[aword])
+#                 else:
+#                     allwords.append(nullwvec)
+#             wrd_stream.extend(allwords)
+#         # Selectively add modalities
+#         if 'pose' in self.modality:
+#             retval['pose'] = np.array(pose_stream).astype(np.float32)
+#         if 'face' in self.modality:
+#             retval['face'] = np.array(face_stream).astype(np.float32)
+#         if 'word' in self.modality:
+#             retval['word'] = np.array(wrd_stream).astype(np.float32)
+#         # Target
+#         retval['Y'] = yval = np.reshape([1 if alab == 1 else 0 \
+#             for alab in self.Y[talkid]],(1,-1)).astype(np.int64)
+#         retval['ylabel'] = self.ylabel
 
-        return retval
+#         return retval
 
 def collate_for_streamed(datalist):
     '''
@@ -1257,8 +1258,34 @@ def get_sent_boundary(atalk,computeAll=False):
         cp.dump(data_meta,open(file_meta,'wb'))
     return data_meta['sent_2_time_map']
 
+def get_sent_boundary_new(atalk,computeAll=False):
+    '''
+    Returns the sentence boundary corresponding to each dependency tree in TED_meta.
+    If the data is not available in TED_meta, it computes the data using the follwoing
+    function: align_fave_transcript_to_word_boundary
+    Once computed, it adds the info to TED_meta for faster processing next time.
+    '''
+    dir_meta = os.path.join(ted_data_path,'TED_meta')
+    file_meta = os.path.join(dir_meta,str(atalk)+'.pkl')
+    data_meta = cp.load(open(file_meta))
+
+    dataexists = all(akey in data_meta for akey in ['utterances','utterances_starttime'])
+
+    if not dataexists or computeAll:
+        wordlist_meta_sent, sent2wordmap, wordlist_bound_sent, alignmentmap, \
+          word_2_time_map, sent_2_time_map = align_fave_transcript_to_word_boundary(atalk)
+        data_meta['wordlist_meta_sent']=wordlist_meta_sent
+        data_meta['sent2wordmap']=sent2wordmap
+        data_meta['wordlist_bound_sent']=wordlist_bound_sent
+        data_meta['alignmentmap']=alignmentmap
+        data_meta['word_2_time_map']=word_2_time_map
+        data_meta['sent_2_time_map']=sent_2_time_map
+        cp.dump(data_meta,open(file_meta,'wb'))
+    return data_meta['sent_2_time_map']
+
 def align_fave_transcript_to_word_boundary(atalk):
     '''
+    ============ SET FOR DEPRECATION ===========
     Aligns each sentence in fave_style_transcript for TED_meta with the
     words in TED_feature_word_boundary. In returns the following:
     a) wordlist_meta_sent: list of words in fave_style_transcript
@@ -1339,6 +1366,54 @@ def align_fave_transcript_to_word_boundary(atalk):
         sent_2_time_map[i]=(word_2_time_map[left][0],word_2_time_map[right][1])
     return wordlist_meta_sent, sent2wordmap, wordlist_bound_sent, \
         alignmentmap, word_2_time_map, sent_2_time_map
+
+def __check_fave_data_validity__(atalk):
+    '''
+    Checks the validity of the fave style transcripts.
+    This checking is done by matching the utterance level time-stamps with the
+    sentence level time-stamps provided in the fave-style transcripts.
+    For comparison, sentences must be lowercased, without any linefeed symbol, multiple
+    whilespaces must be replaced by a single whitespace, and all the annotations
+    must be removed e.g. (Laughter), (applause) etc.
+    '''
+    dir_meta = os.path.join(ted_data_path,'TED_meta')
+    file_meta = os.path.join(dir_meta,str(atalk)+'.pkl')
+    data = cp.load(open(file_meta))
+
+    # Relevant regular expressions
+    punct = re.compile('[.?!]$')
+    lf = re.compile('\n')
+    tagcatcher = re.compile('\(\w*\)')
+    white_sp = re.compile('\s{2,}')
+
+
+    sentence = ''
+    sentList_utt = []
+    original_utt = []
+    # Getting sentences from utterances
+    for anutt in data['utterances']:
+        lfcleared = lf.sub(' ',anutt.lower())
+        sentence+= ' '+lfcleared
+        if punct.search(lfcleared):
+            # found a sentence
+            sentence = tagcatcher.sub('',sentence)
+            sentence = white_sp.sub(' ',sentence).strip()
+            sentList_utt.append(sentence)
+            sentence = ''
+    sentiter = iter(sentList_utt)
+    # Getting sentences from fave style aligner
+    for apara in data['fave_style_transcript']:
+      for asent in apara['sentences']:
+          nextsent = sentiter.next()
+          asent = lf.sub(' ',asent.lower())
+          asent = tagcatcher.sub('',asent)
+          asent = white_sp.sub(' ',asent).strip()
+          if not asent == nextsent:
+            print 'Fave:',asent
+            print 'utter:',nextsent
+            import pdb; pdb.set_trace()  # breakpoint 80600ddd //
+
+  
 
 def __sent_len_hist__():
     import matplotlib.pyplot as plt

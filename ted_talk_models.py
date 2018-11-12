@@ -105,6 +105,8 @@ def __def_tensor__(gpunum,listobj):
 
 class LSTM_TED_Rating_Predictor_Averaged(nn.Module,ModelIO):
     '''
+    SET FOR DEPRECATION
+    ===================
     An LSTM based rating predictor. It expects to intake
     from ttdf.TED_Rating_Averaged_Dataset
     It is for use of multiple modalities.
@@ -369,7 +371,7 @@ class TreeLSTM_with_Prosody(TreeLSTM):
 class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
     An LSTM based rating predictor. It expects to intake
-    from ttdf.TED_Rating_Averaged_Dataset 
+    from ttdf.TED_Rating_wordonly_indices_Dataset 
     '''
 
     def __init__(self, hidden_dim, output_dim, 

@@ -1,9 +1,11 @@
 import os
 import re
 import csv
+import requests
 import urllib2
 import sys
 import json
+import glob
 import numpy as np
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -29,7 +31,7 @@ def request_http(url):
     sys.stdout.flush()
     text_seg=None
     while count < 100:
-        # sleep 5 seconds
+        # sleep 2 seconds
         sleep(2)
         try:
             resp = urllib2.urlopen(url)
@@ -269,6 +271,53 @@ def crawl_and_update(csvfilename,
             with open('./success.txt','a') as fsucc:
                 fsucc.write(url+'\n')
 
+def downloadText(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36'
+    }
+    response = requests.get(url, headers=headers)
+    return response.content
+
+def get_utterance_boundaries_new(force=False):
+    '''
+    This method collects the start times for every utterance from TED talk website.
+    Utterences: In the ted website, when a sentence in the transcript is clicked, the segment
+    gets highlighted is an utterance. When an utterence is clicked, the video gets fast-forwarded
+    to that location in time. This method collects those timestamps and puts in the TED_meta pickle
+    as a key named "utterances_starttime". The actual utterances are saved in a key named "utterances"
+    '''
+    lf = re.compile('\n')
+    meta_path = os.path.join(ted_data_path,'TED_meta')
+    meta_pickles = glob.glob(os.path.join(meta_path,'*.pkl'))
+    for afile in meta_pickles:
+        data = cp.load(open(afile))
+        id = data['talk_meta']['id']
+        if not force and "utterances" in data['talk_meta'] or "utterances_starttime" in data['talk_meta']:
+            print "utterances already exists in",id
+            continue
+        sleep(2)
+        jsonPage = downloadText("https://www.ted.com/talks/"+str(id)+"/transcript.json?language=en")
+        if not jsonPage:
+            print "No transcript time found for ","https://www.ted.com/talks/"+id+"/transcript.json?language=en"
+            print "skipping ..."
+            print
+            continue
+        jsondata = json.loads(jsonPage)
+        utterances = []
+        utterances_starttime = []
+        for p in jsondata["paragraphs"]:
+            for c in p["cues"]:
+                utterances.append(c["text"])
+                utterances_starttime.append(c["time"])
+        assert utterances and utterances_starttime, "either utterances or timestamps empty"
+        assert len(utterances) == len(utterances_starttime), "utterances and time count mismatch"
+        data['utterances'] = utterances
+        data['utterances_starttime'] = utterances_starttime        
+        cp.dump(data,open(afile+'_for_test','wb'))
+        print id,' ... done'
+        
+
+
 if __name__=='__main__':
     if 'SLURM_ARRAY_TASK_ID' in os.environ:
         print 'SLURM_ARRAY_TASK_ID=',os.environ['SLURM_ARRAY_TASK_ID']
@@ -279,6 +328,7 @@ if __name__=='__main__':
             os.path.join(ted_data_path,'TED_meta/'),
             split_idx=int(os.environ['SLURM_ARRAY_TASK_ID']),
             split_num=int(os.environ['TASK_SPLIT']))
+        get_utterance_boundaries_new()
     else:
         print 'SLURM ID not found'
         sys.stdout.flush()
@@ -286,5 +336,6 @@ if __name__=='__main__':
             './TED Talks as of 08.04.2017.csv',
             os.path.join(ted_data_path,'TED_video/'),
             os.path.join(ted_data_path,'TED_meta/'))
+        get_utterance_boundaries_new()
 
 
