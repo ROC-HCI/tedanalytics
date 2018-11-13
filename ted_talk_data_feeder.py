@@ -710,7 +710,8 @@ def collate_and_pack_simple(datalist,gpuNum):
     return {'X':datapack,'Y':Y}
 
 class TED_Rating_wordonly_indices_Dataset(Dataset):
-    """TED rating dataset.
+    """
+    TED rating dataset.
     Only the word modality is used. It will pass the indices of the
     word-vectors for each word in the transcript. For out of vocabulary
     word, it will put -1 as the index. For compound words (e.g. modern-world),
@@ -870,7 +871,7 @@ class TED_Rating_depPOSonly_indices_Dataset(Dataset):
 
 def __read_ooTextFile__(filename):
     '''
-    Read prosody files
+    Read the prosody files
     '''
     dir_pros = os.path.join(ted_data_path,'TED_feature_prosody',
         'full_video_raw')
@@ -1042,14 +1043,18 @@ class wvec_index_maker():
     the wordvector values (w2v_vals) as a matrix (easier gputization). The rows of
     this matrix is consistent with the w2v_indices. Initialize it only once because
     it loads the w2v dictionary while initializing.
+    If load_words is True, it keeps a dictionary that maps from the word-indices to
+    the actual words. Loading this dictionary is memory intensive so its usage is
+    discouraged.
     '''
-    def __init__(self,gpuNum):
+    def __init__(self,gpuNum,load_words=False):
         self.gpunum = gpuNum
         # Reading the complete w2v dictionary
         wvec = read_crop_glove()
         self.w2v_indices = {akey:i for i,akey in enumerate(wvec)}
+        if load_words:
+            self.w2v_words = {i:akey for i,akey in enumerate(wvec)}
         self.w2v_vals = variablize(np.array(wvec.values()).astype(np.float32),gpuNum)
-        # Reading the POS and dependency dictionaries
         self.dims = len(wvec['the'])
     
     def __call__(self,talkid,flatten_sentence=False):
@@ -1067,9 +1072,11 @@ class wvec_index_maker():
                 if temp:
                     wordlist = word_tokenize(temp.lower())
                     if flatten_sentence:
-                        allidx.extend(self.word2idx(wordlist))
+                        allidx.extend(self.word2idx(wordlist).view(-1,1))
                     else:
                         allidx.append(self.word2idx(wordlist))
+        if flatten_sentence:
+            allidx = torch.cat(allidx,dim = 0)
         return allidx
 
     def word2idx(self,wordlist):
@@ -1089,6 +1096,30 @@ class wvec_index_maker():
             else:
                 allidx.append(-1)
         return variablize(np.array(allidx).astype(np.int64),self.gpunum)
+
+    def __display_transcript__(self,talkid,flatten_sentence=False):
+        '''
+        Given a talkid, shows the words the way it is encoded. This function
+        requires loading the w2v_words dictionary by setting load_words arg
+        to True requiring additional memory.
+        '''
+        allidx = self.__call__(talkid,flatten_sentence)
+        if flatten_sentence:
+            for idx_int in allidx.cpu().numpy().tolist():
+                if idx_int == -1:
+                    print '<OOV>','\t','-1'
+                else:
+                    print self.w2v_words[idx_int],'\t',idx_int
+        else:
+            for senid,asent in enumerate(allidx):
+                print 'sentence --',senid
+                for anidx in asent.cpu().data.numpy().tolist():
+                    if anidx == -1:
+                        print '<OOV>','\t','-1'
+                    else:
+                        print self.w2v_words[anidx],'\t',anidx
+                print
+
 
 ########################### Deprecated #########################################
 # class TED_Rating_Streamed_Dataset(TED_Rating_Averaged_Dataset):
@@ -1156,40 +1187,40 @@ class wvec_index_maker():
 
 #         return retval
 
-def collate_for_streamed(datalist):
-    '''
-    Pad and pack a list of datapoints obtained from TED_Rating_Streamed_Dataset
-    '''
-    alldata={}
-    Y_batch=[]
-    for j,akey in enumerate(['pose','face','word','Y']): 
-        if not akey in datalist[0]:
-            continue
-        sizelist = [np.size(item[akey],axis=0) for item in datalist]
-        idx = np.argsort([-asize for asize in sizelist])
-        sizelist = [sizelist[i] for i in idx]
-        alldata[akey] = []
-        for i in idx:
-            if akey == 'Y':
-                Y_batch.append(datalist[i]['Y'])
-            else:
-                dattemp = Variable(torch.from_numpy(datalist[i][akey]))
-                alldata[akey]+=[dattemp]
-        if not akey=='Y':        
-            alldata[akey] = pad_sequence(alldata[akey])
-            alldata[akey] = pack_padded_sequence(alldata[akey],sizelist)
-    # Packing Y
-    Y_shaped = np.concatenate(Y_batch,axis=0)
-    alldata['Y'] = Variable(torch.from_numpy(Y_shaped))
-    return alldata
+# def collate_for_streamed(datalist):
+#     '''
+#     Pad and pack a list of datapoints obtained from TED_Rating_Streamed_Dataset
+#     '''
+#     alldata={}
+#     Y_batch=[]
+#     for j,akey in enumerate(['pose','face','word','Y']): 
+#         if not akey in datalist[0]:
+#             continue
+#         sizelist = [np.size(item[akey],axis=0) for item in datalist]
+#         idx = np.argsort([-asize for asize in sizelist])
+#         sizelist = [sizelist[i] for i in idx]
+#         alldata[akey] = []
+#         for i in idx:
+#             if akey == 'Y':
+#                 Y_batch.append(datalist[i]['Y'])
+#             else:
+#                 dattemp = Variable(torch.from_numpy(datalist[i][akey]))
+#                 alldata[akey]+=[dattemp]
+#         if not akey=='Y':        
+#             alldata[akey] = pad_sequence(alldata[akey])
+#             alldata[akey] = pack_padded_sequence(alldata[akey],sizelist)
+#     # Packing Y
+#     Y_shaped = np.concatenate(Y_batch,axis=0)
+#     alldata['Y'] = Variable(torch.from_numpy(Y_shaped))
+#     return alldata
 
-def get_data_iter_streamed(dataset,batch_size=4,shuffle=True,
-        collate_fn=collate_for_streamed,
-        pin_memory=False):
-    dataiter = DataLoader(dataset,batch_size=batch_size,shuffle=shuffle,
-        num_workers=mp.cpu_count()-1,collate_fn=collate_fn,
-        pin_memory=pin_memory)
-    return dataiter
+# def get_data_iter_streamed(dataset,batch_size=4,shuffle=True,
+#         collate_fn=collate_for_streamed,
+#         pin_memory=False):
+#     dataiter = DataLoader(dataset,batch_size=batch_size,shuffle=shuffle,
+#         num_workers=mp.cpu_count()-1,collate_fn=collate_fn,
+#         pin_memory=pin_memory)
+#     return dataiter
 
 def get_data_iter_simple(dataset,batch_size=4,shuffle=True,
         collate_fn=collate_and_pack_simple,
@@ -1260,6 +1291,8 @@ def get_sent_boundary(atalk,computeAll=False):
 
 def get_sent_boundary_new(atalk,computeAll=False):
     '''
+    ========= FLAGGED FOR DEPRECATION. USE UTTERANCE LEVEL BOUNDARIES INSTEAD =========
+    ========= SEE __check_fave_data_validity__ ========================================
     Returns the sentence boundary corresponding to each dependency tree in TED_meta.
     If the data is not available in TED_meta, it computes the data using the follwoing
     function: align_fave_transcript_to_word_boundary
@@ -1321,7 +1354,6 @@ def align_fave_transcript_to_word_boundary(atalk):
     m = len(data_meta['dep_2_fave'])
     buffer = 5
     for i in range(m):
-
         # Pick each sentence from the fave_style_transcript, make a combined list of
         # the words (wordlist_meta_sent) and a map that points to the indices of the
         # words for each sentence
@@ -1347,7 +1379,6 @@ def align_fave_transcript_to_word_boundary(atalk):
             print wordlist_bound_sent[frm:upto]
             buffer = 5 + len(temp_wordlist)
             continue
-
         alignmentmap.update({k+sent2wordmap[i][0]:frm+v \
             for k,v in tempMap.items() if not v == -1})
         frm = alignmentmap.values()[-1]+1
@@ -1375,6 +1406,9 @@ def __check_fave_data_validity__(atalk):
     For comparison, sentences must be lowercased, without any linefeed symbol, multiple
     whilespaces must be replaced by a single whitespace, and all the annotations
     must be removed e.g. (Laughter), (applause) etc.
+
+    RESULT: Sentence boundaries in the Fave-style transcripts are erroreneous. It is
+    better to use the utterance-level boundaries to find sentence boundaries.
     '''
     dir_meta = os.path.join(ted_data_path,'TED_meta')
     file_meta = os.path.join(dir_meta,str(atalk)+'.pkl')
@@ -1412,8 +1446,6 @@ def __check_fave_data_validity__(atalk):
             print 'Fave:',asent
             print 'utter:',nextsent
             import pdb; pdb.set_trace()  # breakpoint 80600ddd //
-
-  
 
 def __sent_len_hist__():
     import matplotlib.pyplot as plt
@@ -1463,4 +1495,4 @@ def main():
     print 'Preparing Storytelling features'
     import ted_talk_classical_experiments as ttce
     X,_,_,comp = ttce.__loaddata__()
-    ttce.evaluate_clu
+    ttce.evaluate_clusters_pretty(X,comp)
