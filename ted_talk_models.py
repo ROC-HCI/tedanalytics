@@ -23,7 +23,7 @@ class ModelIO():
     then change the parameters to correct values from stored in the disk.
     '''
     ignore_keys = ['_backward_hooks','_forward_pre_hooks','_backend',\
-        '_forward_hooks']#,'_modules','_parameters','_buffers']
+        '_forward_hooks','_modules','_parameters','_buffers']
     def save(self, fout):
         '''
         Save the model parameters (both from __dict__ and state_dict())
@@ -33,9 +33,9 @@ class ModelIO():
         # Save internal parameters
         for akey in self.__dict__:
             if not akey in self.ignore_keys:
-                model_content.update(self.__dict__)
+                model_content.update({akey:self.__dict__[akey]})
         # Save state dictionary
-        model_content['state_dict']=self.state_dict()
+        model_content['state_dict']=self.state_dict()        
         torch.save(model_content,fout)
 
     def load(self,fin,map_location=None):
@@ -161,25 +161,26 @@ class LSTM_custom(nn.Module,ModelIO):
     '''
     A custom implementation of LSTM in pytorch. Donot use. VERY slow
     '''
-    def __init__(self,input_dim,hidden_dim):
+    def __init__(self,input_dim,hidden_dim,activation=torch.tanh):
         super(LSTM_custom,self).__init__()
-        self.W_xi = nn.Linear(input_dim,hidden_dim)
-        self.W_hi = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xf = nn.Linear(input_dim,hidden_dim)
-        self.W_hf = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xg = nn.Linear(input_dim,hidden_dim)
-        self.W_hg = nn.Linear(hidden_dim,hidden_dim)
-        self.W_xo = nn.Linear(input_dim,hidden_dim)
-        self.W_ho = nn.Linear(hidden_dim,hidden_dim)
+        self.Wi_xh = nn.Linear(input_dim,hidden_dim)
+        self.Wi_hh = nn.Linear(hidden_dim,hidden_dim)
+        self.Wf_xh = nn.Linear(input_dim,hidden_dim)
+        self.Wf_hh = nn.Linear(hidden_dim,hidden_dim)
+        self.Wg_xh = nn.Linear(input_dim,hidden_dim)
+        self.Wg_hh = nn.Linear(hidden_dim,hidden_dim)
+        self.Wo_xh = nn.Linear(input_dim,hidden_dim)
+        self.Wo_hh = nn.Linear(hidden_dim,hidden_dim)
+        self.activ = activation
 
     def forward(self,x,hidden):
         h,c = hidden[0],hidden[1]
-        i = torch.sigmoid(self.W_xi(x) + self.W_hi(h))
-        f = torch.sigmoid(self.W_xf(x) + self.W_hf(h))
-        g = torch.tanh(self.W_xg(x) + self.W_hg(h))
-        o = torch.sigmoid(self.W_xo(x)+self.W_ho(h))
+        i = torch.sigmoid(self.Wi_xh(x) + self.Wi_hh(h))
+        f = torch.sigmoid(self.Wf_xh(x) + self.Wf_hh(h))
+        g = self.activ(self.Wg_xh(x) + self.Wg_hh(h))
+        o = torch.sigmoid(self.Wo_xh(x)+self.Wo_hh(h))
         c_ = f*c + i*g
-        h_ = o * torch.tanh(c_)
+        h_ = o * self.activ(c_)
         return h_,c_
 
 class TreeLSTM(nn.Module,ModelIO):
@@ -375,13 +376,20 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
     '''
 
     def __init__(self, hidden_dim, output_dim, 
-        wvec_vals,gpuNum=-1,dropout=0.0):
+        wvec_vals,flatten_sentence=False,gpuNum=-1,dropout=0.0):
         super(LSTM_TED_Rating_Predictor_wordonly, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.wvec=wvec_vals
         self.input_dim = np.size(wvec_vals,axis=1)
-        self.lstm = nn.LSTMCell(self.input_dim, hidden_dim)
+        self.flatten_sentence = flatten_sentence
+        # Use custom LSTM implementation for flattened sentence
+        if self.flatten_sentence:
+            self.lstm = nn.LSTMCell(self.input_dim, hidden_dim)
+        else:
+            # For a flattened sentence, tanh activation causes vanishing
+            # gradient problem. So we use the relu.
+            self.lstm = LSTM_custom(self.input_dim, hidden_dim,activation=torch.relu)
         self.dropout = dropout
         self.dropconnect = nn.Dropout(self.dropout)
         self.linear_rat = nn.Linear(hidden_dim, output_dim)
@@ -400,12 +408,19 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
         return (ttdf.variablize(nullvec.copy(),self.gpuNum),
                 ttdf.variablize(nullvec.copy(),self.gpuNum))
 
-    def forward(self, minibatch):        
+    def __apply_dropconnect__(self):
+        if hasattr(self,'dropconnect'):
+            lstm_params = self.lstm.state_dict()
+            for k,v in lstm_params.items():
+                if k.endswith('hh'):
+                    lstm_params[k] = self.dropconnect(v)
+            self.lstm.load_state_dict(lstm_params)        
+
+    def forward(self, minibatch):
         outrating = []
-        for an_item in minibatch:            
+        for an_item in minibatch:
             if type(an_item['X'])==list:
-                # Sentence is not flattened. We want average of outputs
-                # for each sentence.
+                # Transcript is not flattened. We want to average the sentence-wise outputs.
                 outsum = self.hidden_0[0]
                 count = 0.
                 for j,asent in enumerate(an_item['X']):
@@ -417,12 +432,7 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
                         if i==0:
                             # First iteration. Set the first hidden and dropout
                             hx, cx = self.lstm(x,self.hidden_0)
-                            if hasattr(self,'dropconnect'):
-                                lstm_params = self.lstm.state_dict()
-                                for k,v in lstm_params.items():
-                                    if k.endswith('hh'):
-                                        lstm_params[k] = self.dropconnect(v)
-                                self.lstm.load_state_dict(lstm_params)
+                            self.__apply_dropconnect__()
                         else:
                             hx, cx = self.lstm(x, (hx,cx))
                     # Accumulate vectors per sentence
@@ -438,10 +448,12 @@ class LSTM_TED_Rating_Predictor_wordonly(nn.Module,ModelIO):
                     else:
                         x = self.wvec[an_input,:]
                     if i==0:
-                        # set the first hidden
+                        # First iteration. Set the first hidden and dropout
                         hx, cx = self.lstm(x,self.hidden_0)
+                        self.__apply_dropconnect__()
                     else:
                         hx, cx = self.lstm(x, (hx,cx))
+
             # Feed through the Linear            
             rat_scores = self.linear_rat(hx).view(-1,1)
             outrating.append(rat_scores)

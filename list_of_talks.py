@@ -1,4 +1,5 @@
 import csv
+import numpy as np
 '''
 This module provides access to the ID's and ratings of valid TED talks
 in the dataset. It makes heavy use of the database index (index.csv) sp
@@ -39,16 +40,23 @@ test_set = set([ 233,  665,  263,  195,  660,  75, 1315, 1090, 1944,  614, 1565,
        2700,  470, 2391, 1645, 2049, 1517, 1862])
 
 # Process and make the talk id's and talk ratings ready
-# Makes the following two global variables available:
-# all_valid_talks
-# all_ratings
+# Makes the following global variables available:
+# all_valid_talks  <-- List of valid talkid's
+# all_ratings      <-- List of ratings for the valid talkid's
+# test_set_ratings <-- Ratings for the test sets
+# all_totalviews   <-- Total view-counts for all the talks
+# totalviews_mean  <-- Average of Total view-counts
+# totalviews_std   <-- Standard deviation of Total view-counts
 reader = csv.DictReader(open('./index.csv','rU'))
 all_valid_talks = []
 all_ratings = {}
 test_set_ratings={}
+all_totalviews={}
 for arow in reader:
     if arow['Is_a_Talk?']=='Yes':
         atalk = int(arow['Video_ID'])
+        all_totalviews[atalk] = int(arow['Totalviews'])
+        totalviews_mean = np
         # Skip the talks in the test set. This data is hidden for the final result.
         if test_set and atalk in test_set:
             test_set_ratings[atalk]={ratings:int(arow[ratings]) for ratings in rating_labels}
@@ -58,6 +66,8 @@ for arow in reader:
           continue
         all_valid_talks.append(atalk)
         all_ratings[atalk] = {ratings:int(arow[ratings]) for ratings in rating_labels}
+totalviews_mean = np.mean(all_totalviews.values())
+totalviews_std = np.std(all_totalviews.values())
 if test_set:
     test_set=list(test_set)
 

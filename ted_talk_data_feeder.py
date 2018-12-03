@@ -105,6 +105,8 @@ def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
     valid_talks = lst_talks.all_valid_talks
     valid_ratings = lst_talks.all_ratings.copy()
     if read_hidden_test_set:
+        # When the reserved Test dataset is accessed, inform the user about it
+        # as a precausion.
         print 'Warning: Accessing the hidden test set'
         valid_talks = lst_talks.all_valid_talks + lst_talks.test_set
         valid_ratings.update(lst_talks.test_set_ratings)
@@ -122,7 +124,7 @@ def binarized_ratings(firstThresh=50.,secondThresh=50.,scale_rating=True,
                 y.append(float(valid_ratings[atalk][akey]))
         y_gt.append(y)
     # Convert into a numpy array
-    y_gt = np.array(y_gt)
+    y_gt = np.array(y_gt)    
     # Calculate the thresholds
     thresh1 = sp.percentile(y_gt,firstThresh,axis=0)
     thresh2 = sp.percentile(y_gt,secondThresh,axis=0)
@@ -737,7 +739,7 @@ class TED_Rating_wordonly_indices_Dataset(Dataset):
         ################ DEBUG * REMOVE ###############
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        #self.data_indices = self.data_indices[:10]
+        # self.data_indices = self.data_indices[:2]
         #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         #iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
         ###############################################

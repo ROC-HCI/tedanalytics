@@ -229,7 +229,7 @@ def train_recurrent_models(
     learning_rate = 0.001,
     weight_decay = 0.00033,
     dropconnect = 0.2,
-    max_iter_over_dataset = 48,
+    max_iter_over_dataset = 50,
     GPUnum = 0):
     '''
     Trains the LSTM models using sequential datasets.

@@ -14,7 +14,7 @@ def plot_statistics(infolder,outfolder):
     alltalks = [str(afile)+'.pkl' for afile in all_valid_talks]
     tottalks = len(alltalks)
     totlen,totratings,tottok,totsent = 0,0,0,0
-    lenlst,viewlst,ratinglst,topratings,timealive,kwlst=[],[],{},{},[],[]
+    lenlst,viewlst,ratinglst,ratinglst_per_talk,topratings,timealive,kwlst=[],[],{},[],{},[],[]
     for afile in alltalks:
         print afile
         atalk=cp.load(open(infolder+afile,'rb'))
@@ -30,6 +30,7 @@ def plot_statistics(infolder,outfolder):
         allratings = {key:val for key,val in atalk['talk_meta']['ratings'].items() \
             if not key=='total_count'}
         totalratcnt = atalk['talk_meta']['ratings']['total_count']
+        ratinglst_per_talk.append(totalratcnt)
         totratings += totalratcnt
         for akey in allratings.keys():
             if not ratinglst.get(akey):
@@ -63,7 +64,12 @@ def plot_statistics(infolder,outfolder):
     print 'Average words per talk:', float(tottok)/float(tottalks)
     print 'Average sentences per talk:', float(totsent)/float(tottalks)
     print 'Average words per sentence:', float(tottok)/float(totsent)
-    print 'Average length of talks:', float(totlen)/float(tottalks)/60.,'Minutes'
+    print 'Average length of talks:', float(totlen)/float(tottalks),'Minutes'
+    print 'Average number of ratings per talk',sum(ratinglst_per_talk)/float(len(ratinglst_per_talk))
+
+    # Print Minimum
+    print 'Minimum number of ratings in any talk',min(ratinglst_per_talk)
+
 
     # Plot video-length distribution
     plt.figure(1)
