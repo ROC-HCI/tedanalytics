@@ -1,6 +1,7 @@
 import cPickle as cp
 import os
 import nltk
+import datetime
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -28,6 +29,7 @@ def plot_correlation(abs_ratcnt,infolder,
     tottalks = len(alltalks)
     totlen,totut,tottok,totsent = 0,0,0,0
     lenlst,viewlst,ratinglst,topratings,timealive,kwlst=[],[],{},{},[],[]
+    agelist=[]
     titles=[]
     allratings={}
     allrating_names=['beautiful','confusing','courageous','fascinating','funny',\
@@ -39,6 +41,12 @@ def plot_correlation(abs_ratcnt,infolder,
         atalk=cp.load(open(infolder+afile,'rb'))
         # View count
         viewlst.append(atalk['talk_meta']['totalviews'])
+        # Age of talk
+        assert type(atalk['talk_meta']['datecrawled'])==datetime.datetime and \
+            type(atalk['talk_meta']['datepublished'])==datetime.datetime,\
+            'Talk age calulation: datetime type mismatch'
+        age_days = (atalk['talk_meta']['datecrawled']-atalk['talk_meta']['datepublished']).days
+        agelist.append(age_days)
         # Update total ratings and list the highest rating of each talk
         for akey in allrating_names:
             if akey=='total_count':
@@ -58,14 +66,18 @@ def plot_correlation(abs_ratcnt,infolder,
     # Drawing the scatter plots
     allcorr=[]
     for ind,akey in enumerate(allratings):
+        corr_ages  = np.corrcoef(agelist,allratings[akey])[0,1]
+        print 'Correlation coefficient for rating',akey,'and Age of Video:',corr_ages
+    print
+    for ind,akey in enumerate(allratings):
         # remove the outliers because some ratings are so high that it skews the plot
         #idx = remove_outlier(allratings[akey])
         #x = [viewlst[i] for i in idx]
         #y = [allratings[akey][i] for i in idx]
         # Calculate Correlation Coefficient
-        z = np.corrcoef(viewlst,allratings[akey])[0,1]
-        allcorr.append(z)
-        print 'Correlation coefficient for rating',akey,'and view count:',z
+        corr_views = np.corrcoef(viewlst,allratings[akey])[0,1]
+        allcorr.append(corr_views)
+        print 'Correlation coefficient for rating',akey,'and view count:',corr_views
         if show_scatter:
             plt.figure(ind)
             plt.scatter(viewlst,allratings[akey],alpha=0.33)
