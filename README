@@ -8,6 +8,16 @@ Contents
 ========
 TBD
 
+Setup Procedure
+===============
+If you want to install the code with your dataset (so that you can directly test the codes with your copy of the TED dataset),
+you need to take the following steps: 
+1) Modify the tedanalytics/TED_data_location.py file to put the dataset path (get the dataset from the following location:
+dropbox. Use patial sync to include only the relevant folders. The total dataset is very large) 
+2) Run ted_talk_makeindex.py file. This should go smoothly 
+3) Run ted_talk_data_feeder.py. This should go smoothly 
+4) Run ted_talk_statistic.py and ted_talk_statistic_correlation.py for checking the dataset statistics. This should match with the paper
+
 
 
 
